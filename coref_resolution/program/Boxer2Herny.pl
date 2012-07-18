@@ -12,38 +12,74 @@ my $ifile = "";
 my $ofile = "";
 my $cfile = "";
 my $sfile = "";
-my $cost = 1;
-my $split;
-my $same;
-my $modality;
+my $nonmerge_opt = "";
+
+my $cost = "1";
+my $split = 0;
+my $samepred = 0;
+my $sameargs = 0;
+my $modality = 0;
+
 
 GetOptions ("input=s" => \$ifile,
 	    "output=s" => \$ofile,
 	    "conditional=s" => \$cfile,
             "coref=s" => \$sfile,
-            "cost=i" => \$cost,
+            "cost=s" => \$cost,
             "split=i" => \$split,
-            "same=i" => \$same,
-            "modality=i" => \$modality);
+            "nonmerge=s" => \$nonmerge_opt);
 
-if($split eq ""){$split = 1;}
-if($same eq ""){$same = 1;}
-if($modality eq ""){$modality = 1;}
-
-if((((($ifile eq "")||($ofile eq ""))||(($split!=0)&&($split!=1)))||(($same!=0)&&($same!=1)))||(($modality!=0)&&($modality!=1))){
-    print "Usage: perl Boxer2Henry.pl\n --input <boxer file>\n --output <henry file>\n --cost <real number> (default=1)\n --conditional <conditional unification file>\n --coref <standford coref file>\n --modality <consider modality to create non-merge> (possible values: [0=no, 1=yes], default: 1)\n --split <split nouns concatenated by Boxer> (possible values: [0=no, 1=yes], default: 1)\n --same <non-merge for props with the same names> (possible values: [0=no, 1=yes], default: 1)\n";
-    exit(0);
-}
+&setParameters();
 
 &read_Conditional_file();
+
 open(OUT,">$ofile") or die "Cannot open $ofile\n";
+
 &read_Boxer_file();
 
 ## ADD COREF INFO FROM STANDFORD NLP
-if($sfile ne ""){
-  &add_coref();
-}
+&add_coref();
+
+print "Henry file printed.\n";
+
 close OUT;
+
+###########################################################################
+# SET PARAMETERS
+###########################################################################
+
+sub setParameters(){
+   if(($ifile eq "")||($ofile eq "")) {print("Input or output file missing.\n"); &printUsage();}
+
+   if(($split!=0)&&($split!=1)) {print("Wrong value of 'split' parameter: $split. Only '0' and '1' accepted.\n"); exit(0);}
+
+   if($cost !~ /\d+(.\d+)?/) {print("Wrong value of 'cost' parameter: $cost. Only real numbers accepted.\n"); exit(0);}
+
+   if($nonmerge_opt ne ""){
+   	my @data = split(/,/,$nonmerge_opt);
+        foreach my $d (@data){
+        	&setNMParameter($d);
+        }
+   }
+}
+
+sub setNMParameter(){
+   my ($p) = @_;
+
+   if($p eq "modality") {$modality = 1;}
+   elsif($p eq "samepred") {$samepred = 1;}
+   elsif($p eq "sameargs") {$sameargs = 1;}
+   else{print("Wrong value of 'nonmerge' parameter: $p. Only 'modality', 'samepred', and 'sameargs' accepted.\n"); exit(0);}
+}
+
+###########################################################################
+# PRING USAGE
+###########################################################################
+
+sub printUsage(){
+    print "Usage: perl Boxer2Henry.pl\n --input <boxer file>\n --output <henry file>\n --cost <real number> (default=1)\n [--conditional <conditional unification file>]\n [--coref <standford coref file>]\n [--split <split nouns concatenated by Boxer> (possible values: [0=no, 1=yes], default: 1)]\n [--non-merge <nonmerge options> (possible values:modality,samepred,sameargs) 'modality' -- consider modality to create non-merge, 'samepred' -- non-merge for props with the same name, 'sameargs' -- non-merge for args of the same prop] \n";
+    exit(0);
+}
 
 ###########################################################################
 # ADD COREF INFO
@@ -52,6 +88,8 @@ close OUT;
 my %coref_info = ();
 
 sub add_coref(){
+
+    if($sfile eq "") {return;}
 
     &read_coref_file();
 
@@ -101,12 +139,14 @@ sub add_coref(){
     }
 
     #print OUT Dumper(%id2props); exit(0);
+    print "Coreference information added.\n";
 
-    #foreach my $sid (keys %id2props){
-    for (my $i=1; $i<=(scalar keys %id2props);$i++){
-          add_nonmerge($i);
-          printHenryFormat($i);
-          %nonmerge = ();
+    ## ADD NONMERGE CONSTRAINTS AND PRINT OUT HENRY FORMAT SENCENCE BY SENTENCE
+    for my $sid (sort (keys %id2props)){
+	    print "Processing sentence $sid.\n";
+	    &add_nonmerge($sid);
+	    &printHenryFormat($sid);
+	    %nonmerge = ();
     }
 }
 
@@ -152,30 +192,33 @@ sub read_coref_file(){
 
     close FILE;
     %id2word = ();
+
+    print "Coference file read.\n";
 }
+
 
 ###########################################################################
 # ADD NON-MERGE CONSTRAINTS
 ###########################################################################
 
 sub add_nonmerge(){
-    return;
    my ($sent_id) = @_;
+
+   if(($modality+$samepred+$sameargs)==0) {return;}
 
    my @pids = keys %{$id2props{$sent_id}};
 
    #CHECK CONDITIONAL AND MODALITY IN ADVANCE
-   if(($same==1)||($modality==1)){
+   if(($samepred==1)||($modality==1)){
         for my $pid (@pids){
 	        for my $pname (keys %{$id2props{$sent_id}{$pid}}){
 	             if($pname ne "WORD"){
-                        if($same==1){
+                        if($samepred==1){
                         	$id2props{$sent_id}{$pid}{$pname}{'cond'} = &check_conditional($pname,(scalar @{$id2props{$sent_id}{$pid}{$pname}{'args'}}));
                         }
 
                         if($modality==1){
                                 $id2props{$sent_id}{$pid}{$pname}{'mod'} = &define_modality($sent_id,$pid,$pname);
-                                #print "$sent_id $pid $pname " . $id2props{$sent_id}{$pid}{$pname}{'mod'} . "\n";
                         }
                      }
 	        }
@@ -186,19 +229,22 @@ sub add_nonmerge(){
         my $pid1 = $pids[$i];
         for my $pname1 (keys %{$id2props{$sent_id}{$pid1}}){
            if($pname1 ne "WORD"){
-              ## ARGUMENTS OF THE SAME PREDICATE CANNOT BE MERGED
               my @args =  @{$id2props{$sent_id}{$pid1}{$pname1}{'args'}};
-              foreach(my $i=0;$i<(scalar @args);$i++){
-              	      my $arg1 = $args[$i];
-	              foreach(my $j=$i+1;$j<(scalar @args);$j++){
-	                 my $arg2 = $args[$j];
-	                 if($arg1 ne $arg2){
-	                        if(!(exists $nonmerge{$arg2."!=".$arg1})){
-	                                $nonmerge{$arg1."!=".$arg2} = 1;
-	                        }
-	                 }
-	              }
-	       }
+
+              ## ARGUMENTS OF THE SAME PREDICATE CANNOT BE MERGED
+              if($sameargs == 1){
+              		foreach(my $i=0;$i<(scalar @args);$i++){
+	                      my $arg1 = $args[$i];
+	                      foreach(my $j=$i+1;$j<(scalar @args);$j++){
+	                         my $arg2 = $args[$j];
+	                         if($arg1 ne $arg2){
+	                                if(!(exists $nonmerge{$arg2."!=".$arg1})){
+	                                        $nonmerge{$arg1."!=".$arg2} = 1;
+	                                }
+	                         }
+	                      }
+	               }
+               }
                ############################################
 
                ## FIRST ARGUMENTS OF PREDICATES HAVING THE SAME NAME OR
@@ -206,13 +252,13 @@ sub add_nonmerge(){
 
                #print Dumper($id2props{'1'}); exit(0);
 
-               if((($same==1)||($modality==1))&&($id2props{$sent_id}{$pid1}{$pname1}{'cond'} == 0)){
+               if((($samepred==1)||($modality==1))&&($id2props{$sent_id}{$pid1}{$pname1}{'cond'} == 0)){
                      foreach(my $j=$i+1;$j<(scalar @pids);$j++){
         		my $pid2 = $pids[$j];
         		for my $pname2 (keys %{$id2props{$sent_id}{$pid2}}){
                            if($pname2 ne "WORD"){
                              ## SAME PREDICATES CANNOT BE MERGED
-                             if(($same==1)&&($pname1 eq $pname2)){
+                             if(($samepred==1)&&($pname1 eq $pname2)){
                                 #print "$pid1 $pid2 $pname1\n";
                                 my $a1 = $args[0];
 	                        my $a2 = $id2props{$sent_id}{$pid2}{$pname2}{'args'}[0];
@@ -307,21 +353,38 @@ sub printHenryFormat(){
 
     my $id_counter = 1;
 
+    my %out_str = ();
+
     foreach my $pid (keys %{$id2props{$sent_id}}){
          foreach my $pname (keys %{$id2props{$sent_id}{$pid}}){
                if($pname ne "WORD"){
-                       $str = $str . $pname . "(";
-	               foreach my $arg (@{$id2props{$sent_id}{$pid}{$pname}{'args'}}){
-	                        $str = $str . $arg . ",";
-	               }
-	               chop($str);
-	               $str = $str . "):$cost:$sent_id-$id_counter:$pid & ";
-	               $id_counter++;
+                       my @args = @{$id2props{$sent_id}{$pid}{$pname}{'args'}};
+                       my $key = $pname.",".$args[0];
+                       if(!(exists $out_str{$key})){
+                            my $pred_str = $pname . "(";
+                            foreach my $arg (@args){
+	                        $pred_str = $pred_str . $arg . ",";
+	               	    }
+	               	    chop($pred_str);
+                            $pred_str = $pred_str . "):$cost:$sent_id-$id_counter";
+
+                            $out_str{$key}{'pred'} = $pred_str;
+                       }
+                       push(@{$out_str{$key}{'pids'}},$pid);
                }
     	}
     }
 
-    #print $sent_id . ": " . Dumper(%nonmerge);
+
+    foreach my $key (keys %out_str){
+        $id_counter++;
+        $str = $str . $out_str{$key}{'pred'} . ":[";
+        foreach my $pid (@{$out_str{$key}{'pids'}}){
+           $str = $str . $pid . ",";
+        }
+        chop($str);
+        $str = $str . "] & ";
+    }
 
     foreach my $nm (keys %nonmerge){
     	$str = $str . $nm . " & ";
@@ -329,6 +392,8 @@ sub printHenryFormat(){
 
     chop($str);chop($str);chop($str);
     print OUT $str . "\n";
+
+    %out_str = ();
 }
 
 ###########################################################################
@@ -344,29 +409,17 @@ sub read_Conditional_file(){
         my $arity = $2;
 
         $regex_conditional{$regexp_name} = $arity;
-
-        #my $newstruc = {
-        #   name => $regexp_name,
-        #   arity => $arity,
-        #   regex => 1,
-        #};
-        #push(@conditional,$newstruc);
      }
      elsif($line =~ /set_condition\((.+)\/(\d+):/){
         my $name = $1;
         my $arity = $2;
 
         $conditional{$name} = $arity;
-
-        #my $newstruc = {
-        #   name => $name,
-        #   arity => $arity,
-        #   regex => 0,
-        #};
-        #push(@conditional,$newstruc);
      }
    }
    close(CFILE);
+
+   print "Conditional unification predicates file read\n";
 }
 
 ###########################################################################
@@ -405,24 +458,20 @@ sub read_Boxer_file(){
 
        }
        elsif($line =~ /^id\((.+),\d+\)\.\n/){
-           if((scalar keys %id2props)>0){
-                if($sfile eq ""){  ## WHILE NOT RESOLVING COREFECENCE, WE WANT TO TREAT SENTENCES SEPARATELY
-                	&add_nonmerge($sent_id);
-           		&printHenryFormat($sent_id);
-                }
-           }
-           elsif(($sfile eq "")&&($sent_id ne "")){
-           	print "        No props: $sent_id \n";
-           }
+           if(($sent_id ne "")&&((scalar keys %id2props)==0)){
+    		print "No props for sent: $sent_id \n";
+    	   }
 
+           if($sfile eq ""){
+                print "Processing sentence $sent_id.\n";
+	    	&add_nonmerge($sent_id);
+	   	&printHenryFormat($sent_id);
+                %id2props = ();
+           }
 
            $sent_id = $1;
            $sent_id =~ s/ //g;
            $sent_id =~ s/'//g;
-           print $sent_id . "\n";
-
-           if($sfile eq ""){%id2props = ();}
-           %nonmerge = ();
            $ne_count = 0;
        }
        elsif($line =~ /(\d+) ([^\s]+) [^\s]+ [^\s]+ [^\s]+/){
@@ -451,7 +500,7 @@ sub read_Boxer_file(){
 
                 if($id_str eq ""){
                 	$new_id++;
-                        push(@ids,"ID".$new_id);
+                        push(@ids,"$sent_id-ID$new_id");
                 }
                 else{
                     @ids = $id_str =~ /(\d+)/g;
@@ -547,7 +596,7 @@ sub read_Boxer_file(){
            	}
                 else{	##THERE IS NO POSTFIX
                    if ($name =~ /[\w\d]/){  ## IT IS A NORMAL PREDICATE, NOT JUST SOME SYMBOLS
-                        $name = &check_prep($name);
+                        $name = &check_prep($name);  ## CHECK IF IT IS A PROPOSITION
                         my $lname = $name."'";
 
                         foreach my $id (@ids){
@@ -568,17 +617,18 @@ sub read_Boxer_file(){
     }
     close IN;
 
-    if((scalar keys %id2props)>0){
-        if($sfile eq ""){        ## WHILE NOT RESOLVING COREFECENCE, WE WANT TO TREAT SENTENCES SEPARATELY
-        	&add_nonmerge($sent_id);
-        	&printHenryFormat($sent_id);
-        }
-    }
-    elsif(($sfile eq "")&&($sent_id ne "")){
-    	print "        No props: $sent_id \n";
+    if(($sent_id ne "")&&((scalar keys %id2props)==0)){
+    		print "No props for sent: $sent_id \n";
     }
 
-    #print Dumper(%id2props); exit(0);
+    if($sfile eq ""){
+    	print "Processing sentence $sent_id.\n";
+	&add_nonmerge($sent_id);
+	&printHenryFormat($sent_id);
+        %id2props = ();
+    }
+
+    print "Boxer file read.\n";
 }
 ################################################################################
 # CHECK IF BOXER DID NOT RECOGNIZE SOME PREPOSITIONS AS SUCH
