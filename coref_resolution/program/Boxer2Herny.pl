@@ -7,11 +7,13 @@ my %regex_conditional = ();
 my %nonmerge = ();
 my %id2props = ();
 my %args2props = ();
+my %count_words_before = ();
 
 my $ifile = "";
 my $ofile = "";
 my $cfile = "";
 my $sfile = "";
+my $nefile = "";
 my $nonmerge_opt = "";
 
 my $cost = "1";
@@ -25,6 +27,7 @@ GetOptions ("input=s" => \$ifile,
 	    "output=s" => \$ofile,
 	    "conditional=s" => \$cfile,
             "coref=s" => \$sfile,
+            "nedis=s" => \$nefile,
             "cost=s" => \$cost,
             "split=i" => \$split,
             "nonmerge=s" => \$nonmerge_opt);
@@ -40,9 +43,28 @@ open(OUT,">$ofile") or die "Cannot open $ofile\n";
 ## ADD COREF INFO FROM STANDFORD NLP
 &add_coref();
 
-print "Henry file printed.\n";
+## ADD NE DISAMBIGUATION INFO FROM STANDFORD NLP
+&add_nedis();
+
+## IF COREF OR NE INFO WAS ADDED THEN PRINT OUT (OTHEWISE IT HAS BEEN ALREADY PRINTED OUT)
+if(($sfile ne "")||($nefile ne "")){&add_nm_and_printAll();}
 
 close OUT;
+
+###########################################################################
+# ADD NON MERGE AND PRINT ALL
+###########################################################################
+
+sub add_nm_and_printAll(){
+    ## ADD NONMERGE CONSTRAINTS AND PRINT OUT HENRY FORMAT SENCENCE BY SENTENCE
+    for my $sid (sort (keys %id2props)){
+	    print "Processing sentence $sid...\n";
+	    &add_nonmerge($sid);
+	    &printHenryFormat($sid);
+	    %nonmerge = ();
+    }
+    print "Henry file printed.\n";
+}
 
 ###########################################################################
 # SET PARAMETERS
@@ -77,8 +99,94 @@ sub setNMParameter(){
 ###########################################################################
 
 sub printUsage(){
-    print "Usage: perl Boxer2Henry.pl\n --input <boxer file>\n --output <henry file>\n --cost <real number> (default=1)\n [--conditional <conditional unification file>]\n [--coref <standford coref file>]\n [--split <split nouns concatenated by Boxer> (possible values: [0=no, 1=yes], default: 1)]\n [--non-merge <nonmerge options> (possible values:modality,samepred,sameargs) 'modality' -- consider modality to create non-merge, 'samepred' -- non-merge for props with the same name, 'sameargs' -- non-merge for args of the same prop] \n";
+    print "Usage: perl Boxer2Henry.pl\n --input <boxer file>\n --output <henry file>\n --cost <real number> (default=1)\n [--conditional <conditional unification file>]\n [--coref <standford coref file>]\n [--nedis <disambiguated named entities file>]\n [--split <split nouns concatenated by Boxer> (possible values: [0=no, 1=yes], default: 0)]\n [--non-merge <nonmerge options> (possible values:modality,samepred,sameargs) 'modality' -- consider modality to create non-merge, 'samepred' -- non-merge for props with the same name, 'sameargs' -- non-merge for args of the same prop] \n";
     exit(0);
+}
+
+###########################################################################
+# ADD NAMED ENTITIES DISAMBIGUATION INFO
+###########################################################################
+
+my %nedis_info = ();
+
+sub add_nedis(){
+     if($nefile eq "") {return;}
+
+     &read_nedis_file();
+
+     my $constant_counter = 0;
+
+    foreach my $entity (keys %nedis_info){
+         $constant_counter++;
+         my $new_predname = lc($entity)."-nn'";
+         $new_predname =~ s/_/-/g;
+
+         my %been = ();
+
+         foreach my $key (keys %{$nedis_info{$entity}}){
+              for (my $i=$nedis_info{$entity}{$key}{'start'}; $i<=$nedis_info{$entity}{$key}{'end'};$i++){
+                   my $sid = $nedis_info{$entity}{$key}{'sid'};
+                   my $boxer_tid = $sid * 1000 + $i;
+
+                   if(exists $id2props{$sid}{$boxer_tid}){
+                        for my $pname (keys %{$id2props{$sid}{$boxer_tid}}){
+                                 my @args =  @{$id2props{$sid}{$boxer_tid}{$pname}{'args'}};
+                                 if((scalar @args)==2){
+                                      # REPLACE ARGS WITH A NEW CONSTANT
+                                      if(!(exists $been{$args[1]})){
+                                        $been{$args[1]} = 1;
+
+                                        &replace_args($args[0],"E".$constant_counter,"");
+                                        &replace_args($args[1],"NE".$constant_counter,"");
+                                      }
+	                         }
+                        }
+                        delete($id2props{$sid}{$boxer_tid});
+                        foreach my $a (keys %{$args2props{$sid}}){
+                            delete($args2props{$sid}{$a}{$boxer_tid});
+                        }
+                   }
+                   $id2props{$sid}{$boxer_tid}{$new_predname}{'args'} = ["E".$constant_counter,"NE".$constant_counter];
+                   $args2props{$sid}{"E".$constant_counter}{$boxer_tid}{$new_predname}{'0'} = 1;
+                   $args2props{$sid}{"NE".$constant_counter}{$boxer_tid}{$new_predname}{'1'} = 1;
+              }
+         }
+    }
+
+}
+
+###########################################################################
+# ADD NAMED ENTITIES DISAMBIGUATION INFO
+###########################################################################
+
+sub read_nedis_file(){
+    open(FILE,$nefile) or die "Cannot open $nefile\n";
+
+    my $nedis_counter = 0;
+
+    while(my $line=<FILE>){
+         if($line =~ /([^\s]+):(\d+)-(\d+) -> ([^\s\n]+)/){
+         	my $sid = $1;
+                my $start_id = $2;
+                my $end_id = $3;
+                my $entity = $4;
+
+                if(($entity ne "--NME--")&&($entity !~ /\\/)){
+                	$nedis_counter++;
+
+                	$nedis_info{$entity}{$nedis_counter}{'sid'} = $sid;
+                	$nedis_info{$entity}{$nedis_counter}{'start'} = $start_id - $count_words_before{$sid};
+                	$nedis_info{$entity}{$nedis_counter}{'end'} = $end_id - $count_words_before{$sid};
+                }
+         }
+         else{
+         	print "Strange NE line: $line";
+         }
+    }
+
+    close FILE;
+
+    print "Disambiguated named entities file read.\n";
 }
 
 ###########################################################################
@@ -99,13 +207,14 @@ sub add_coref(){
 
     foreach my $key (keys %coref_info){
         $constant_counter++;
+        my %been = ();
+
         foreach my $sid (keys %{$coref_info{$key}}){
              foreach my $tid (keys %{$coref_info{$key}{$sid}}){
                   my $boxer_tid = $sid * 1000 + $tid;
 
                   if(exists $id2props{$sid}{$boxer_tid}){
                         for my $pname (keys %{$id2props{$sid}{$boxer_tid}}){
-                            if($pname ne "WORD"){
                         	my @args =  @{$id2props{$sid}{$boxer_tid}{$pname}{'args'}};
 
 	                        my $arg = "";
@@ -120,18 +229,13 @@ sub add_coref(){
 	                                print "Another coref element ($sid, $boxer_tid): $pname\n";
 	                        }
 
-                                #print "C$constant_counter: $boxer_tid $pname $arg\n";
-
+                                # REPLACE ARGS WITH A NEW CONSTANT
 	                        if($arg ne ""){
-	                                foreach my $aid (keys %{$args2props{$sid}{$arg}}){
-	                                     foreach my $ap (keys %{$args2props{$sid}{$arg}{$aid}}){
-                                                  foreach my $aind (keys %{$args2props{$sid}{$arg}{$aid}{$ap}}){
-	                                          	$id2props{$sid}{$aid}{$ap}{'args'}[$aind] = "C".$constant_counter;
-                                                  }
-	                                     }
-	                                }
-	                        }
-                             }
+                                   if(!(exists $been{$arg})){
+                                        $been{$arg} = 1;
+                                        &replace_args($arg,"C".$constant_counter,$sid);
+                                   }
+                                }
                         }
                   }
              }
@@ -140,13 +244,31 @@ sub add_coref(){
 
     #print OUT Dumper(%id2props); exit(0);
     print "Coreference information added.\n";
+}
 
-    ## ADD NONMERGE CONSTRAINTS AND PRINT OUT HENRY FORMAT SENCENCE BY SENTENCE
-    for my $sid (sort (keys %id2props)){
-	    print "Processing sentence $sid.\n";
-	    &add_nonmerge($sid);
-	    &printHenryFormat($sid);
-	    %nonmerge = ();
+###########################################################################
+# REPLACE ARGS
+###########################################################################
+
+sub replace_args(){
+    my ($arg,$newarg,$sid) = @_;
+
+    if($sid ne ""){
+    	foreach my $aid (keys %{$args2props{$sid}{$arg}}){
+	            foreach my $ap (keys %{$args2props{$sid}{$arg}{$aid}}){
+	                    foreach my $aind (keys %{$args2props{$sid}{$arg}{$aid}{$ap}}){
+                                       if(exists $id2props{$sid}{$aid}{$ap}){
+                                       		$id2props{$sid}{$aid}{$ap}{'args'}[$aind] = $newarg;
+                                       }
+	                    }
+	            }
+	}
+	$args2props{$sid}{$newarg} = delete $args2props{$sid}{$arg};
+    }
+    else{
+       foreach my $s (keys %args2props){
+          &replace_args($arg,$newarg,$s);
+       }
     }
 }
 
@@ -212,7 +334,6 @@ sub add_nonmerge(){
    if(($samepred==1)||($modality==1)){
         for my $pid (@pids){
 	        for my $pname (keys %{$id2props{$sent_id}{$pid}}){
-	             if($pname ne "WORD"){
                         if($samepred==1){
                         	$id2props{$sent_id}{$pid}{$pname}{'cond'} = &check_conditional($pname,(scalar @{$id2props{$sent_id}{$pid}{$pname}{'args'}}));
                         }
@@ -220,7 +341,6 @@ sub add_nonmerge(){
                         if($modality==1){
                                 $id2props{$sent_id}{$pid}{$pname}{'mod'} = &define_modality($sent_id,$pid,$pname);
                         }
-                     }
 	        }
 	}
    }
@@ -228,7 +348,6 @@ sub add_nonmerge(){
    foreach(my $i=0;$i<(scalar @pids);$i++){
         my $pid1 = $pids[$i];
         for my $pname1 (keys %{$id2props{$sent_id}{$pid1}}){
-           if($pname1 ne "WORD"){
               my @args =  @{$id2props{$sent_id}{$pid1}{$pname1}{'args'}};
 
               ## ARGUMENTS OF THE SAME PREDICATE CANNOT BE MERGED
@@ -282,7 +401,6 @@ sub add_nonmerge(){
                         }
                      }
                }
-           }
         }
    }
 }
@@ -328,7 +446,7 @@ sub define_modality(){
    for my $pid2 (keys %{$id2props{$sent_id}}){
         if($pid ne $pid2){
         	for my $pname2 (keys %{$id2props{$sent_id}{$pid2}}){
-                     if((($pname2 ne "WORD")&&($id2props{$sent_id}{$pid2}{$pname2}{'pos'} ne "p"))&&($pname2 ne "rel'")){
+                     if(($id2props{$sent_id}{$pid2}{$pname2}{'pos'} ne "p")&&($pname2 ne "rel'")){
                            my @args2 = @{$id2props{$sent_id}{$pid2}{$pname2}{'args'}};
 	                   foreach(my $k=1;$k<(scalar @args2);$k++){
 	                        if($args2[$k] eq $arg1){
@@ -357,7 +475,6 @@ sub printHenryFormat(){
 
     foreach my $pid (keys %{$id2props{$sent_id}}){
          foreach my $pname (keys %{$id2props{$sent_id}{$pid}}){
-               if($pname ne "WORD"){
                        my @args = @{$id2props{$sent_id}{$pid}{$pname}{'args'}};
                        my $key = $pname.",".$args[0];
                        if(!(exists $out_str{$key})){
@@ -371,7 +488,6 @@ sub printHenryFormat(){
                             $out_str{$key}{'pred'} = $pred_str;
                        }
                        push(@{$out_str{$key}{'pids'}},$pid);
-               }
     	}
     }
 
@@ -451,6 +567,7 @@ sub read_Boxer_file(){
     my $ne_count = 0;
     my $new_id = 0;
     my $sent_id = "";
+    my $word_counter = 0;
 
     open(IN,$ifile) or die "Cannot open $ifile\n";
     while(my $line=<IN>){
@@ -462,7 +579,7 @@ sub read_Boxer_file(){
     		print "No props for sent: $sent_id \n";
     	   }
 
-           if($sfile eq ""){
+           if(($sfile eq "")&&($nefile eq "")){
                 print "Processing sentence $sent_id.\n";
 	    	&add_nonmerge($sent_id);
 	   	&printHenryFormat($sent_id);
@@ -473,13 +590,16 @@ sub read_Boxer_file(){
            $sent_id =~ s/ //g;
            $sent_id =~ s/'//g;
            $ne_count = 0;
+
+           $count_words_before{$sent_id} = $word_counter;
        }
        elsif($line =~ /(\d+) ([^\s]+) [^\s]+ [^\s]+ [^\s]+/){
-           if($sfile ne ""){
-                  my $id = $1;
-	          my $word = $2;
-	          $id2props{$sent_id}{$id}{'WORD'} = $word;
-           }
+           #if(($sfile ne "")||($nefile ne "")){
+           #       my $id = $1;
+	   #       my $word = $2;
+	   #       $id2props{$sent_id}{$id}{'WORD'} = $word;
+           #}
+           $word_counter++;
        }
        elsif($line ne "\n"){
            my @prop_str = split(" & ", $line);
@@ -553,7 +673,7 @@ sub read_Boxer_file(){
                                     	$id2props{$sent_id}{$id}{$lname}{'args'} = [@args];
                                     	$id2props{$sent_id}{$id}{$lname}{'pos'} = "n";
 
-                                        if($sfile ne ""){
+                                        if(($sfile ne "")||($nefile ne "")){
                                 		# CREATE args2props
                                                 $args2props{$sent_id}{$args[0]}{$id}{$lname}{'0'} = 1;
                                         	$args2props{$sent_id}{$args[1]}{$id}{$lname}{'1'} = 1;
@@ -568,7 +688,7 @@ sub read_Boxer_file(){
                                     	$id2props{$sent_id}{$id}{$lname}{'args'} = [$sent_id."ne".$ne_count,$args[1]];
                                     	$id2props{$sent_id}{$id}{$lname}{'pos'} = "n";
 
-                                        if($sfile ne ""){
+                                        if(($sfile ne "")||($nefile ne "")){
                                 		# CREATE args2props
                                                 $args2props{$sent_id}{$args[0]}{$id}{$lname}{'0'} = 1;
                                         	$args2props{$sent_id}{$args[1]}{$id}{$lname}{'1'} = 1;
@@ -584,7 +704,7 @@ sub read_Boxer_file(){
                                     	$id2props{$sent_id}{$id}{$lname}{'args'} = [@args];
                                     	$id2props{$sent_id}{$id}{$lname}{'pos'} = $postfix;
 
-                                        if($sfile ne ""){
+                                        if(($sfile ne "")||($nefile ne "")){
                                 		# CREATE args2props
                                                 for (my $i=0;$i<(scalar @args);$i++){
                                                         $args2props{$sent_id}{$args[$i]}{$id}{$lname}{$i} = 1;
@@ -603,7 +723,7 @@ sub read_Boxer_file(){
                                     	$id2props{$sent_id}{$id}{$lname}{'args'} = [@args];
                                     	$id2props{$sent_id}{$id}{$lname}{'pos'} = "";
 
-                                        if($sfile ne ""){
+                                        if(($sfile ne "")||($nefile ne "")){
                                 		# CREATE args2props
                                                 for (my $i=0;$i<(scalar @args);$i++){
                                                         $args2props{$sent_id}{$args[$i]}{$id}{$lname}{$i} = 1;
@@ -621,7 +741,7 @@ sub read_Boxer_file(){
     		print "No props for sent: $sent_id \n";
     }
 
-    if($sfile eq ""){
+    if(($sfile eq "")&&($nefile eq "")){
     	print "Processing sentence $sent_id.\n";
 	&add_nonmerge($sent_id);
 	&printHenryFormat($sent_id);
