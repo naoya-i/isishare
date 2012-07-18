@@ -2,11 +2,12 @@
 # Mmhhmmaaahhhhyyy precious...
 .PRECIOUS: %.drs %.ccg
 
+# Please set the following directories appropriately.
 DIR_REASONER=$(HOME)/tmp/henry-n700
 DIR_CONLL_DATA=$(HOME)/tmp/conll2011/conll-2011/v2/data
 DIR_CANDC=/home/work/tools/ubuntu/semantic_parser/candc
 
-DIR_PROGRAMS=./programs
+DIR_PROGRAMS=./program
 
 BSN=$(basename $@)
 BSFN=$(basename $(notdir $@))
