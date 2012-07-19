@@ -16,9 +16,9 @@ def conll2candc( txt ):
 	doc, prt = re.findall( "^#begin document \((.*?)\); part ([0-9]+)", txt )[0]
 	snt_id	 = 0
 
-	print "\n<META> '%s-%s'" % (os.path.basename(doc), prt)
+	print "\n<META> '%s-%s'" % (os.path.basename(doc), prt),
 	
-	for ln in txt.split( "\n" ):
+	for i, ln in enumerate( txt.strip().split( "\n" ) ):
 		if "" == ln or "#begin" in ln or "#end" in ln: continue
 		ln = ln.split()
 		
@@ -26,6 +26,9 @@ def conll2candc( txt ):
 		
 		print ln[3],
 
+	print
+	print
+	print
 		
 def main():
 	parser = argparse.ArgumentParser( description="A converter from CoNLL dataset to candc input file." )
