@@ -369,8 +369,6 @@ sub add_nonmerge(){
                ## FIRST ARGUMENTS OF PREDICATES HAVING THE SAME NAME OR
                ## DIFFERENT MODALITY CANNOT BE MERGED (EXCLUDING CONDITIONAL UNIFICATION PREDICATES)
 
-               #print Dumper($id2props{'1'}); exit(0);
-
                if((($samepred==1)||($modality==1))&&($id2props{$sent_id}{$pid1}{$pname1}{'cond'} == 0)){
                      foreach(my $j=$i+1;$j<(scalar @pids);$j++){
         		my $pid2 = $pids[$j];
@@ -571,10 +569,11 @@ sub read_Boxer_file(){
 
     open(IN,$ifile) or die "Cannot open $ifile\n";
     while(my $line=<IN>){
+       chomp($line);
        if($line =~ /^%%%/){
 
        }
-       elsif($line =~ /^id\((.+),\d+\)\.\n/){
+       elsif($line =~ /^id\((.+),\d+\)\./){
            if(($sent_id ne "")&&((scalar keys %id2props)==0)){
     		print "No props for sent: $sent_id \n";
     	   }
@@ -593,7 +592,7 @@ sub read_Boxer_file(){
 
            $count_words_before{$sent_id} = $word_counter;
        }
-       elsif($line =~ /(\d+) ([^\s]+) [^\s]+ [^\s]+ [^\s]+/){
+       elsif($line =~ /^(\d+) ([^\s]+) [^\s]+ [^\s]+ [^\s]+/){
            #if(($sfile ne "")||($nefile ne "")){
            #       my $id = $1;
 	   #       my $word = $2;
@@ -601,7 +600,7 @@ sub read_Boxer_file(){
            #}
            $word_counter++;
        }
-       elsif($line ne "\n"){
+       elsif($line ne ""){
            my @prop_str = split(" & ", $line);
            foreach my $p (@prop_str){
                 my $name;
@@ -633,7 +632,7 @@ sub read_Boxer_file(){
                 $name =~ s/ /-/g;
                 $name =~ s/_/-/g;
                 $name =~ s/:/-/g;
-                $name =~ s/\./-/g;
+                #$name =~ s/\./-/g;
                 $name =~ s/\//-/g;
 
                 if($name =~ /(.+)-([a-z])$/){  ## THERE IS A PREFIX
