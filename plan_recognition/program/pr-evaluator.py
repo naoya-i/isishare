@@ -23,6 +23,76 @@ EvaluatedArgs = """
 (plan_partying partying ?person1 ?drink1 ?instrument1), (inst ?p partying), (agent_party ?p ?person1), (party_thing_drunk ?p ?drink1),(party_drink_straw ?p ?instrument1)
 """.splitlines()
 
+def main():
+	parser = argparse.ArgumentParser( description="An evaluation script for plan recognition." )
+	parser.add_argument( "--input", help="The input file to be evaluated.", type=file, nargs=1, default=sys.stdin )
+	pa = parser.parse_args()
+	
+	num_total_correct		 = 0
+	num_total_system_lfs = 0
+	num_total_gold_lfs	 = 0
+
+	tpl_arg_list = dict( [(re.findall( "\(inst .. (.*?)\)", x )[0], re.findall( "\((.*?) .*?\)", x )[2:]) for x in EvaluatedArgs if "" != x] )
+
+	print tpl_arg_list
+	
+	for result in pa.input:
+		problem_name, system, answer = result.split( "\t" )
+
+		#pafilter			 = lambda x: None != re.match( top_plan_regex, x )
+		
+		#def pafilterBind( bindings ): return lambda x: None != re.match( top_plan_regex + "\((%s)\)" % "|".join( bindings ), x )
+
+		lfs_system = sorted( _shrink( system.split( " ^ " ) ) )
+		lfs_gold	 = sorted( _shrink( answer.split( " ^ " ) ) )
+
+		tpl_system = _createTopLevelPlan( lfs_system, tpl_arg_list )
+		tpl_gold	 = _createTopLevelPlan( lfs_gold, tpl_arg_list )
+
+		print "-- %s --" % problem_name
+
+		score	= 0
+		
+		print "Top-level plans in gold data:"
+		print "\n".join( [repr(x) for x in tpl_gold] )
+		
+		print "Top-level plans in system output:"
+		print "\n".join( [repr(x) for x in tpl_system] )
+
+		num_correct = 0
+		credit      = {}
+
+		for ts in tpl_system:
+			for tg in tpl_gold:
+				
+				num_local_correct = 0
+				num_local_max     = 0
+				
+				if ts[0][0] == tg[0][0]:
+					num_local_correct = 1 + len( set(ts[1].keys()) & set(tg[1].keys()) )
+					num_local_max     = 1 + len( set(ts[1].keys()) | set(tg[1].keys()) )
+
+				if 0 < num_local_max:
+					credit[ ts[0][0] ] = max( credit.get( ts[0][0], 0 ), 1.0 * num_local_correct / num_local_max )
+
+		print credit
+		num_correct = sum( credit.values() )
+		
+		num_total_correct += num_correct
+		num_total_system_lfs += len( tpl_system )
+		num_total_gold_lfs += len( tpl_gold )
+		
+		print "Precision:", "%.2f" % (1.0 * num_correct / len( tpl_system )) if 0 < len( tpl_system ) else "-", "(%.2f/%.2f)" % (num_correct, len( tpl_system ))
+		print "Recall:   ", "%.2f" % (1.0 * num_correct / len( tpl_gold )                                    ), "(%.2f/%.2f)" % (num_correct, len( tpl_gold ))
+		
+
+	prec, rec = 1.0 * num_total_correct / num_total_system_lfs if 0 < num_total_system_lfs else "-", 1.0 * num_total_correct / num_total_gold_lfs
+	
+	print "-- Total --"
+	print "Overall Precision:", "%.2f" % prec if "-" != prec else "-"
+	print "Overall Recall:   ", "%.2f" % rec
+	print "Overall F-measure:", "%.2f" % ((2*prec*rec) / (prec+rec)) if "-" != prec else "-"
+
 # "PRED(ARG1, ARG2, ARG3, ...)" => ("PRED", ["ARG1", "ARG2", "ARG3", ...])
 def _break(lf):	lf = re.match( "(.*?)\((.*?)\)", lf ); return (lf.group(1), lf.group(2).split(","))
 
@@ -43,6 +113,27 @@ def _shrink( lfs ):
 		for v in eq[1]: signature[v] = rep
 	
 	return list( set([_applySignature( lf, signature ) for lf in lfs if not lf.startswith("=")]) )
+
+#
+def _createTopLevelPlan( lits, tpl_arg_list ):
+	ret = []
+	
+	tlp_g = [_break(lit) for lit in lits if _break(lit)[0][5:] in tpl_arg_list.keys()]
+		
+	for lit_g in tlp_g:
+
+		# Try to create the complete args.
+		tlp_handle_g = lit_g[1][0]
+		roles_g      = defaultdict( list )
+
+		for lit in lits:
+			if _break(lit)[0] in tpl_arg_list[ lit_g[0][5:] ] and tlp_handle_g == _break(lit)[1][0]:
+				roles_g[ _break(lit)[0] ] += [_break(lit)]
+
+		ret += [(lit_g, roles_g)]
+
+	return ret
+
 
 #
 def _findGoldMatch( out_alignments, out_slots, gold, lfs, bind_history, depth = 1 ):
@@ -85,121 +176,6 @@ def _findGoldMatch( out_alignments, out_slots, gold, lfs, bind_history, depth = 
 			print >>sys.stderr, head, "No more matching candidates."
 			return
 
-def main():
-	parser = argparse.ArgumentParser( description="An evaluation script for plan recognition." )
-	parser.add_argument( "--input", help="The input file to be evaluated.", type=file, nargs=1, default=sys.stdin )
-	pa = parser.parse_args()
-	
-	num_total_correct		 = 0
-	num_total_system_lfs = 0
-	num_total_gold			 = 0
-
-	tpl_arg_list = dict( [(re.findall( "\(inst .. (.*?)\)", x )[0], re.findall( "\((.*?) .*?\)", x )[2:]) for x in EvaluatedArgs if "" != x] )
-	
-	for result in pa.input:
-		problem_name, system, answer = result.split( "\t" )
-
-		#pafilter			 = lambda x: None != re.match( top_plan_regex, x )
 		
-		#def pafilterBind( bindings ): return lambda x: None != re.match( top_plan_regex + "\((%s)\)" % "|".join( bindings ), x )
-
-		lfs_system = sorted( _shrink( system.split( " ^ " ) ) )
-		lfs_gold	 = sorted( _shrink( answer.split( " ^ " ) ) )
-
-		print "-- %s --" % problem_name
-
-		score	= 0
-		
-		# lit_g: a top-level plan literal in gold data
-		tlp_g = [_break(lit) for lit in lfs_gold if _break(lit)[0][5:] in tpl_arg_list.keys()]
-		tlp_s = [_break(lit) for lit in lfs_system if _break(lit)[0][5:] in tpl_arg_list.keys()]
-
-		print >>sys.stderr, "Top-level plans in gold data:", tlp_g
-		print >>sys.stderr, "Top-level plans in system output:", tlp_s
-		
-		for lit_g in tlp_g:
-			tlp_handle_g = lit_g[1][0]
-			roles_g			 = [_break(lit) for lit in lfs_gold if _break(lit)[0] in tpl_arg_list[ lit_g[0][5:] ] and tlp_handle_g == _break(lit)[1][0]]
-			
-			local_score			= 0
-			local_max_score = 1 + len(roles_g)			
-			mapping_score		= defaultdict(int)
-
-			print >>sys.stderr, "Plan matching:", lit_g
-			
-			# lit_s: a top-level plan literal that matches lit_g in system output.
-			for lit_s in [_break(lit) for lit in lfs_system if lit_g[0] == _break(lit)[0] ]:
-				
-				# "lit_s" is a matching candidate for "lit_g."
-				tlp_handle_s = lit_s[1][0]
-				log_head = "Plan matching: Role matching: %s: %s -> %s:" % (lit_g, tlp_handle_g, tlp_handle_s)
-
-				# Now searching for the roles of this plan.
-				# lit_gr: a role of lit_g in gold data.
-				for lit_gr in roles_g:
-					
-					# lit_sr: a role of lit_g with binding g/s in system output.
-					found_roles = 0
-					
-					for lit_sr in [_break(lit) for lit in lfs_system if lit_gr[0] == _break(lit)[0] and tlp_handle_s == _break(lit)[1][0] and lit_gr[1][1] == _break(lit)[1][1]]:
-						print >>sys.stderr, log_head, lit_gr, lit_sr
-						mapping_score[ log_head ] += 1
-						found_roles += 1
-
-					if 0 == found_roles:
-						print >>sys.stderr, log_head, repr(lit_gr) + ": Not found."
-						
-				print >>sys.stderr, log_head, "# of roles found:", mapping_score[ log_head ], "/", len(roles_g)
-
-						
-			if 0 < len(mapping_score.values()):
-				score += 1.0 * (1+max( mapping_score.values() )) / local_max_score
-				print >>sys.stderr, "Plan matching: %s: Score: %f" % (repr(lit_g), 1.0 * (1+max( mapping_score.values() )) / local_max_score), "(%d/%d)" % (1+max( mapping_score.values() ), local_max_score)
-
-		print "Precision:", score / len(tlp_s) if 0 < len(tlp_s) else 0
-		print "Recall:   ", score / len(tlp_g)
-
-		num_total_correct += score
-		num_total_gold += len(tlp_g)
-		num_total_system_lfs += len(tlp_s)
-		
-		continue
-	
-		slots, alignments = {}, []
-		_findGoldMatch( alignments, slots, gold, lfs, {} )
-
-		if 0 == len(alignments):
-			best_alignment = {}
-			lfs_bound      = lfs
-		else:
-			best_alignment = max( alignments, key=lambda x: len(x.keys()) )
-			lfs_bound		 = [_applySignature( lf, best_alignment ) for lf in lfs]
-		
-		gold = filter( pafilter, gold )
-
-		# What is a variable that should be evaluated?
-		bindings = [_break(x)[1][0].replace( "?", "\?" ) for x in gold]
-		
-		lfs_bound		= filter( pafilterBind(bindings), lfs_bound )
-		
-		# Superplan
-		_superPlanFilter = lambda x, y, z: not x.startswith( "inst_shopping" ) or (x in z or (x.replace("shopping", "smarket_shopping") not in y and x.replace("shopping", "liqst_shopping") not in y))
-		lfs_bound   = [x for x in lfs_bound if _superPlanFilter(x, lfs_bound, gold)]
-
-		correct_set	= set(gold)&set(lfs_bound)
-
-		print "Gold:", " ^ ".join( gold )
-		print "System:", " ^ ".join( lfs_bound )
-		print "Gold ^ System:", " ^ ".join( correct_set )
-		
-		print "n(G ^ S) =", len( correct_set ), "n(G) =", len( gold ), "n(S) =", len( lfs_bound )
-		num_total_correct += len( correct_set ); num_total_system_lfs += len( lfs_bound ); num_total_gold += len( gold )
-
-		print "Precision:", 100.0 * len(correct_set) / len(lfs_bound)  if 0 != len(lfs_bound) else "-"
-		print "Recall:   ", 100.0 * len(correct_set) / len(gold)        if 0 != len(gold) else "-"
-
-	print "-- Total --"
-	print "Overall Precision:", 100.0 * num_total_correct / num_total_system_lfs
-	print "Overall Recall:   ", 100.0 * num_total_correct / num_total_gold
-
 if "__main__" == __name__: main()
+

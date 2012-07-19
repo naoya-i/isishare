@@ -27,6 +27,8 @@ def main():
 		for xml_chain in xml_cr.xpath( "chain" ):
 			chain = dict( [(int(wordid) if "?" != wordid else 0, xml_chain.attrib["id"]) for wordid in xml_chain.xpath( "wordids" )[0].text.split( "," )] )
 
+		print chain
+		
 		sent_id = 1
 		
 		for ln in open( mapper[ xml_cr.attrib[ "text" ].split("-")[0] ] ):
@@ -41,7 +43,8 @@ def main():
 				
 				if chain.has_key( sent_id * 1000 + int(ln[2]) ):
 					ln[-1] = "(%s)" % chain[ sent_id * 1000 + int(ln[2]) ]
-			
+
+			print sent_id
 			print "\t".join( ln )
 	
 	

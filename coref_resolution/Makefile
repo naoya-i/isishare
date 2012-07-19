@@ -36,6 +36,7 @@ NUM_JOBS             = 2
 	$(FILES_CONLL) | perl -nle 'print $$1 if /\/([^\/]+\..*?)$$/' > c1
 	$(FILES_CONLL) > c2
 	paste c1 c2 > $@
+	rm c1 c2
 
 %.corefout: %.lisp %.drs %.txt knowledge_base
 	echo '<?xml version="1.0"?>\n<coreference-output>' > $(DIR_TMP)/abcorefexp-$(BSFN).corefout
@@ -52,8 +53,9 @@ $(DIR_DATA)/kb.da:
 
 %.lisp: %.drs %.corenlp
 	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
-		python -c "import sys, re; print \"\n\".join( re.findall(\"%%%%%%.*?\nid\('%s_[0-9]+',[0-9]+\)\.\n.*?\n\n\" % \"$$file\", sys.stdin.read(), re.DOTALL) )" < $(BSN).drs > xaxa.tmp.drs; \
-		python -c "import sys, re; print re.findall(\"#begin %s\n(.*?)#end\" % \"$$file\", sys.stdin.read(), re.DOTALL)[0]" < $(BSN).corenlp > xaxa.corenlp; \
+		echo 'Hello,' $$file;\
+		python -c "import sys, re; print \"\n\".join( re.findall(\"%%%[^\n]+\nid\('"$$file"_[0-9]+',[0-9]+\)\.\n.*?\n\n\", sys.stdin.read(), re.DOTALL) )" < $(BSN).drs > xaxa.tmp.drs; \
+		python -c "import sys, re; print re.findall(\"#begin "$$file"\n(.*?)#end\", sys.stdin.read(), re.DOTALL)[0]" < $(BSN).corenlp > xaxa.corenlp; \
 		baseid=`perl -nle 'print $$1 if /^([0-9]+) /' xaxa.tmp.drs | head -n1`; \
 		python $(DIR_PROGRAMS)/shiftdrs.py --input xaxa.tmp.drs --baseid $$baseid > xaxa.drs; \
 		perl $(DIR_PROGRAMS)/Boxer2Herny.pl --input xaxa.drs --coref xaxa.corenlp --output $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry; \
