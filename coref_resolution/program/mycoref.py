@@ -20,22 +20,23 @@ def mycoref( target, pa ):
 
 	# List the sentences.
 	xml_root = etree.Element( "coreference-result", attrib={"text": target} )
+	chain_id = 0
 	
 	for obs_sent in re.findall( "(%s_[0-9]+)\]" % target, henry ):
-		xml_coreference = etree.Element( "coreference-output" )
 		xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 2 -p %s -b %s/kb.da -i cpi" % ( pa.reasoner, pa.input[0], obs_sent, pa.datadir[0] ) ) )
 		hypothesis			= xml_ret.xpath( "/henry-output/result-inference/hypothesis" )[0].text
 		
-		for lit in hypothesis.split( " ^ " ):			
+		for lit in hypothesis.split( " ^ " ):
 			if "=(" in lit:
-				xml_chain							 = etree.Element( "chain" ); 	  xml_coreference.append( xml_chain )
+				xml_chain							 = etree.Element( "chain", attrib={"id": str(chain_id)} ); 	  xml_root.append( xml_chain )
 				xml_chain_vars				 = etree.Element( "variables" ); xml_chain.append( xml_chain_vars )
 				xml_chain_wordids			 = etree.Element( "wordids" );   xml_chain.append( xml_chain_wordids )
 				xml_chain_vars.text    = re.findall( "=\((.*?)\)", lit )[0]
-				xml_chain_wordids.text = ",".join( [ "/".join(map_var_wordid.get(x, "?")) for x in re.findall( "=\((.*?)\)", lit )[0].split(",") ] )
+				xml_chain_wordids.text = ",".join( [ ",".join(map_var_wordid.get(x, "?")) for x in re.findall( "=\((.*?)\)", lit )[0].split(",") ] )
 
+				chain_id += 1
+				
 		xml_root.append( xml_ret.xpath( "/henry-output" )[0] )
-		xml_root.append( xml_coreference )
 		
 	print etree.tostring( xml_root, pretty_print=True )
 			
@@ -54,10 +55,10 @@ def main():
 
 	pa = parser.parse_args()
 
-	if None == pa.reasoner:  parser.error( "Where's the reasoner?" )
-	if None == pa.target:    parser.error( "Which problem should I solve?" )
-	if None == pa.datadir:   parser.error( "Where's the resources?" )
-	if None == pa.drs:       parser.error( "Where's the DRS file?" )
+	if None == pa.reasoner:   parser.error( "Where's the reasoner?" )
+	if None == pa.target:     parser.error( "Which problem should I solve?" )
+	if None == pa.datadir:    parser.error( "Where's the resources?" )
+	if None == pa.drs:        parser.error( "Where's the DRS file?" )
 	
 	for target in pa.target:
 		mycoref( target, pa )
