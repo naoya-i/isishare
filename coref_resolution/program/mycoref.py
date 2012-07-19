@@ -6,14 +6,14 @@ def mycoref( target, pa ):
 
 	facts = []
 
-	print "%s -m infer %s -p %s" % ( pa.reasoner, " ".join( pa.input ), target )
+	print os.popen( "%s -m infer %s -p %s" % ( pa.reasoner, " ".join( pa.input ), target ) ).read()
 
 	# Reproduce the CoNLL format.
 
 	# Load mapping b/w entity variables and word id.
 	drs = pa.drs.read()
 	
-	print re.findall( "\[([^]]+)\]:([^-]+-n)\(.*?,(.*?)\)", drs ) + re.findall( "\[([^]]+)\]:([^-]+-v)\((.*?),", drs )
+	print re.findall( "\[([^]]+)\]:([^(]+-n)\(.*?,(.*?)\)", drs ) + re.findall( "\[([^]]+)\]:([^(]+-v)\((.*?),", drs )
 	
 	return facts
 

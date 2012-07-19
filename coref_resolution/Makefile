@@ -1,69 +1,76 @@
 SHELL = /bin/zsh
 
 # Mmhhmmaaahhhhyyy precious...
-.PRECIOUS: %.drs %.ccg
+.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.lisp
 
+BSN   = $(basename $@)
+BSFN  = $(basename $(notdir $@))
 
 # Please set the following directories appropriately.
-DIR_REASONER=$(HOME)/tmp/henry-n700
-DIR_CONLL_DATA=$(HOME)/tmp/conll2011/conll-2011/v2/data
-DIR_CANDC=/home/work/tools/ubuntu/semantic_parser/candc
-DIR_STANFORD_CORENLP=$(HOME)/tmp/stanford-corenlp-2012-07-09
+DIR_REASONER         = $(HOME)/tmp/henry-n700
+DIR_CONLL_DATA       = $(HOME)/tmp/conll2011/conll-2011/v2/data
+DIR_CANDC            = /home/work/tools/ubuntu/semantic_parser/candc
+DIR_STANFORD_CORENLP = $(HOME)/tmp/stanford-corenlp-2012-07-09
 
-DIR_PROGRAMS=./program
-DIR_DATA=./data
+DIR_TMP              = /tmp
+DIR_PROGRAMS         = ./program
 
-FILES_CONLL=`find $(DIR_CONLL_DATA)/$(BSFN)/data/english/annotations/nw -name '*.*auto_conll' | head -n2`
+FILES_CONLL          = `find $(DIR_CONLL_DATA)/$(BSFN)/data/english/annotations/nw -name '*.*auto_conll' | head -n2`
 
-BSN=$(basename $@)
-BSFN=$(basename $(notdir $@))
+NUM_JOBS             = 2
+
 
 # MQP: Main Query Predicate
-%.coref: %.lisp %.drs
-	python $(DIR_PROGRAMS)/mycoref.py --input $(BSN).lisp --drs $(BSN).drs --reasoner $(DIR_REASONER)/bin/henry --target $(TARGET) $(OPTIONS)
+%.coref: %.lisp %.drs %.txt
+	rm -f $(DIR_TMP)/$(BSFN).sentlist.txt
+	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
+		perl -nle 'print $$1 if /('$$file'_[0-9]+)\)/' $(BSN).lisp >> $(DIR_TMP)/$(BSFN).sentlist.txt;\
+	end;
+	cat $(DIR_TMP)/$(BSFN).sentlist.txt | parallel -j $(NUM_JOBS) 'python $(DIR_PROGRAMS)/mycoref.py --input $(BSN).lisp --drs $(BSN).drs --reasoner $(DIR_REASONER)/bin/henry --target {} $(OPTIONS)' > $@
+	rm -f $(DIR_TMP)/$(BSFN).sentlist.txt
 
 %.lisp: %.drs %.corenlp
 	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
-		python -c "import sys, re; print re.findall(\"#begin %s.txt\n(.*?)#end\" % \"$$file\", sys.stdin.read(), re.DOTALL)[0]" < $(BSN).corenlp > xaxa.corenlp; \
-		python -c "import sys, re; print \"\n\".join( re.findall(\"id\('%s_[0-9]+',[0-9]+\)\.\n.*?\n\n\" % \"$$file\", sys.stdin.read(), re.DOTALL) )" < $(BSN).drs > xaxa.drs; \
-		perl $(DIR_PROGRAMS)/Boxer2Herny.pl --input xaxa.drs --coref xaxa.corenlp --output /tmp/$(BSFN).tmp.henry; \
-		cat /tmp/$(BSFN).tmp.henry >> /tmp/$(BSFN).henry; \
+		python -c "import sys, re; print \"\n\".join( re.findall(\"%%%%%%.*?\nid\('%s_[0-9]+',[0-9]+\)\.\n.*?\n\n\" % \"$$file\", sys.stdin.read(), re.DOTALL) )" < $(BSN).drs > xaxa.tmp.drs; \
+		python -c "import sys, re; print re.findall(\"#begin %s\n(.*?)#end\" % \"$$file\", sys.stdin.read(), re.DOTALL)[0]" < $(BSN).corenlp > xaxa.corenlp; \
+		baseid=`perl -nle 'print $$1 if /^([0-9]+) /' xaxa.tmp.drs | head -n1`; \
+		python $(DIR_PROGRAMS)/shiftdrs.py --input xaxa.tmp.drs --baseid $$baseid > xaxa.drs; \
+		perl $(DIR_PROGRAMS)/Boxer2Herny.pl --input xaxa.drs --coref xaxa.corenlp --output $(DIR_TMP)/$(BSFN).tmp.henry; \
+		cat $(DIR_TMP)/$(BSFN).tmp.henry >> $(DIR_TMP)/$(BSFN).henry; \
 	end;
-	python $(DIR_PROGRAMS)/henry2n700.py /tmp/$(BSFN).henry > /tmp/$(BSFN).lisp
-	mv /tmp/$(BSFN).lisp $@
-	rm /tmp/$(BSFN).henry /tmp/$(BSFN).tmp.henry xaxa.drs xaxa.corenlp;
+	python $(DIR_PROGRAMS)/henry2n700.py $(DIR_TMP)/$(BSFN).henry > $(DIR_TMP)/$(BSFN).lisp
+	mv $(DIR_TMP)/$(BSFN).lisp  $(DIR_TMP)/$(BSFN).henry $(dir $@)
+	rm $(DIR_TMP)/$(BSFN).tmp.henry #xaxa.drs xaxa.corenlp;
 
 %.drs: %.ccg
-	$(DIR_CANDC)/bin/boxer --input $(BSN).ccg --resolve true --semantics tacitus > /tmp/$(BSFN).drs
-	mv /tmp/$(BSFN).drs $@
+	$(DIR_CANDC)/bin/boxer --input $(BSN).ccg --resolve true --semantics tacitus > $(DIR_TMP)/$(BSFN).drs
+	mv $(DIR_TMP)/$(BSFN).drs $@
 
 %.ccg: %.txt
-	$(DIR_CANDC)/bin/candc --models $(DIR_CANDC)/models/boxer --candc-printer boxer --input $(BSN).txt > /tmp/$(BSFN).sentall.ccg
-	python $(DIR_PROGRAMS)/chop4ccg.py --input /tmp/$(BSFN).sentall.ccg > $@
-	mv /tmp/$(BSFN).sentall.ccg $(dir $@)
+	$(DIR_CANDC)/bin/candc --models $(DIR_CANDC)/models/boxer --candc-printer boxer --input $(BSN).txt > $(DIR_TMP)/$(BSFN).sentall.ccg
+	python $(DIR_PROGRAMS)/chop4ccg.py --input $(DIR_TMP)/$(BSFN).sentall.ccg > $@
+	mv $(DIR_TMP)/$(BSFN).sentall.ccg $(dir $@)
 
 %.txt:
-	python $(DIR_PROGRAMS)/conll2txt.py --input $(FILES_CONLL) --format candc > /tmp/$(BSFN).txt
-	mv /tmp/$(BSFN).txt $@
+	python $(DIR_PROGRAMS)/conll2txt.py --input $(FILES_CONLL) --format candc > $(DIR_TMP)/$(BSFN).txt
+	mv $(DIR_TMP)/$(BSFN).txt $@
 
 %.corenlp: %.txt
 	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
-		echo "$(PWD)/$(DIR_DATA)/$$file.txt" >> /tmp/$(BSFN).list.txt; \
-		python -c "import re, sys; print re.findall( \"<META> '$$file'(.*?)\n\n\", sys.stdin.read(), re.DOTALL )[0]" < $(BSN).txt > $(DIR_DATA)/$${file##*/}.txt; \
+		echo "$(DIR_TMP)/abcorefexp-$$file.txt" >> $(DIR_TMP)/abcorefexp-$(BSFN).list.txt; \
+		python -c "import re, sys; print re.findall( \"<META> '$$file'(.*?)\n\n\", sys.stdin.read(), re.DOTALL )[0]" < $(BSN).txt > $(DIR_TMP)/abcorefexp-$${file##*/}.txt; \
 	end;
-	mv /tmp/$(BSFN).list.txt ./$(DIR_DATA)/
-	mypath=$(PWD); cd $(DIR_STANFORD_CORENLP); \
+	cd $(DIR_STANFORD_CORENLP); \
 	java -cp stanford-corenlp-2012-07-09.jar:stanford-corenlp-2012-07-06-models.jar:xom.jar:joda-time.jar \
-	     -Xmx3g edu.stanford.nlp.pipeline.StanfordCoreNLP -annotators tokenize,ssplit,pos,lemma,ner,parse,dcoref -filelist $$mypath/$(DIR_DATA)/$(BSFN).list.txt; \
-	echo -n "" > $$mypath/$(DIR_DATA)/$(BSFN).corenlp; \
-	foreach file (`cat $$mypath/$(DIR_DATA)/$(BSFN).list.txt`) \
-		bsfile=$${file##*/}; \
-		echo "#begin $${bsfile%%.v2_auto_conll.txt}" >> $$mypath/$(DIR_DATA)/$(BSFN).corenlp; \
-		cat $$bsfile.xml >> $$mypath/$(DIR_DATA)/$(BSFN).corenlp; \
-		echo "#end" >> $$mypath/$(DIR_DATA)/$(BSFN).corenlp; \
-		rm $$bsfile.xml; \
+	     -Xmx3g edu.stanford.nlp.pipeline.StanfordCoreNLP -annotators tokenize,ssplit,pos,lemma,ner,parse,dcoref -filelist $(DIR_TMP)/abcorefexp-$(BSFN).list.txt;
+	echo -n "" > $(BSN).corenlp; \
+	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
+		echo "#begin $${file}" >> $(BSN).corenlp; \
+		cat $(DIR_STANFORD_CORENLP)/abcorefexp-$$file.txt.xml >> $(BSN).corenlp; \
+		echo "#end" >> $(BSN).corenlp; \
+		rm $(DIR_STANFORD_CORENLP)/abcorefexp-$$file.txt.xml; \
 	end;
 	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
-		rm $(DIR_DATA)/$${file##*/}.txt; \
+		rm $(DIR_TMP)/abcorefexp-$${file##*/}.txt; \
 	end;
 
