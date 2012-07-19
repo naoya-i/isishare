@@ -1,3 +1,19 @@
+
+#
+#   *  Please specify the following directories, or specify them when you run make.  *
+#
+DIR_REASONER         = $(HOME)/tmp/henry-n700
+DIR_CONLL_DATA       = $(HOME)/tmp/conll2011/conll-2011/v2/data
+DIR_CANDC            = /home/work/tools/ubuntu/semantic_parser/candc
+DIR_STANFORD_CORENLP = $(HOME)/tmp/stanford-corenlp-2012-07-09
+
+DIR_TMP              = /tmp
+DIR_PROGRAMS         = ./program
+DIR_DATA             = ./data
+#
+#                             ***
+#
+
 SHELL = /bin/zsh
 
 # Mmhhmmaaahhhhyyy precious...
@@ -6,16 +22,6 @@ SHELL = /bin/zsh
 BSN   = $(basename $@)
 BSFN  = $(basename $(notdir $@))
 
-# *** Please set the following directories appropriately. ***
-DIR_REASONER         = $(HOME)/tmp/henry-n700
-DIR_CONLL_DATA       = $(HOME)/tmp/conll2011/conll-2011/v2/data
-DIR_CANDC            = /home/work/tools/ubuntu/semantic_parser/candc
-DIR_STANFORD_CORENLP = $(HOME)/tmp/stanford-corenlp-2012-07-09
-
-DIR_TMP              = /tmp
-DIR_PROGRAMS         = ./program
-#
-
 FILES_CONLL          = `find $(DIR_CONLL_DATA)/$(BSFN)/data/english/annotations -name '*.*auto_conll' $(FILES_CONLL_FILTER)`
 FILES_CONLL_FILTER   = '| head -n2'
 
@@ -23,13 +29,18 @@ NUM_JOBS             = 2
 
 
 # MQP: Main Query Predicate
-%.coref: %.lisp %.drs %.txt
-	rm -f $(DIR_TMP)/abcorefexp-$(BSFN).sentlist.txt
-	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
-		perl -nle 'print $$1 if /('$$file'_[0-9]+)\)/' $(BSN).lisp >> $(DIR_TMP)/abcorefexp-$(BSFN).sentlist.txt;\
-	end;
-	cat $(DIR_TMP)/abcorefexp-$(BSFN).sentlist.txt | parallel -j $(NUM_JOBS) 'python $(DIR_PROGRAMS)/mycoref.py --input $(BSN).lisp --drs $(BSN).drs --reasoner $(DIR_REASONER)/bin/henry --target {} $(OPTIONS)' > $@
-	rm -f $(DIR_TMP)/abcorefexp-$(BSFN).sentlist.txt
+%.coref: %.lisp %.drs %.txt knowledge_base
+	echo '<?xml version="1.0"?>\n<coreference-output>' > $(DIR_TMP)/abcorefexp-$(BSFN).coref
+	perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt \
+	| parallel -j $(NUM_JOBS) 'python $(DIR_PROGRAMS)/mycoref.py --input $(BSN).lisp --henry $(BSN).henry --drs $(BSN).drs --reasoner $(DIR_REASONER)/bin/henry \
+									--target {} $(OPTIONS) --datadir $(DIR_DATA)' >> $(DIR_TMP)/abcorefexp-$(BSFN).coref
+	echo '</coreference-output>' >> $(DIR_TMP)/abcorefexp-$(BSFN).coref
+	mv $(DIR_TMP)/abcorefexp-$(BSFN).coref $@
+
+knowledge_base: $(DIR_DATA)/kb.da
+
+$(DIR_DATA)/kb.da:
+	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-basic.lisp -o $@
 
 %.lisp: %.drs %.corenlp
 	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
