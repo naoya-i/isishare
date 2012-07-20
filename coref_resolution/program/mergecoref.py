@@ -25,9 +25,9 @@ def main():
 		chain = {}
 		
 		for xml_chain in xml_cr.xpath( "chain" ):
-			chain = dict( [(int(wordid) if "?" != wordid else 0, xml_chain.attrib["id"]) for wordid in xml_chain.xpath( "wordids" )[0].text.split( "," )] )
+			chain.update( dict( [(int(wordid) if "?" != wordid else 0, xml_chain.attrib["id"]) for wordid in xml_chain.xpath( "wordids" )[0].text.split( "," )] ) )
 
-		print chain
+		#print chain
 		
 		sent_id = 1
 		
@@ -44,8 +44,8 @@ def main():
 				if chain.has_key( sent_id * 1000 + int(ln[2]) ):
 					ln[-1] = "(%s)" % chain[ sent_id * 1000 + int(ln[2]) ]
 
-			print sent_id
-			print "\t".join( ln )
+			#print sent_id
+			print " ".join( ln )
 	
 	
 if "__main__" == __name__: main()

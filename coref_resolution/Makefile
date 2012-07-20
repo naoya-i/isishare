@@ -4,6 +4,7 @@
 #
 DIR_REASONER         = $(HOME)/tmp/henry-n700
 DIR_CONLL_DATA       = $(HOME)/tmp/conll2011/conll-2011/v2/data
+DIR_CONLL_SCORER     = $(HOME)/tmp/conll2011/conll-2011/scorer/v4
 DIR_CANDC            = /home/work/tools/ubuntu/semantic_parser/candc
 DIR_STANFORD_CORENLP = $(HOME)/tmp/stanford-corenlp-2012-07-09
 
@@ -17,7 +18,7 @@ DIR_DATA             = ./data
 SHELL = /bin/zsh
 
 # Mmhhmmaaahhhhyyy precious...
-.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.lisp %.conllidx %.corefout
+.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.lisp %.conllidx %.corefout %.coref
 
 BSN   = $(basename $@)
 BSFN  = $(basename $(notdir $@))
@@ -26,9 +27,16 @@ FILES_CONLL          = find $(DIR_CONLL_DATA)/$(BSFN)/data/english/annotations -
 FILES_CONLL_FILTER   = | head -n2
 
 NUM_JOBS             = 2
-
+EVAL_MEASURE         = muc
 
 # MQP: Main Query Predicate
+%.eval: %.coref
+	cat `$(FILES_CONLL)` > gold.txt
+	pwd=$(PWD); \
+	cd $(DIR_CONLL_SCORER); \
+	perl scorer.pl $(EVAL_MEASURE) $$pwd/gold.txt $$pwd/$(BSN).coref;
+	#rm gold.txt
+
 %.coref: %.corefout %.conllidx
 	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).corefout --conll-index $(BSN).conllidx > $@
 
@@ -61,7 +69,9 @@ $(DIR_DATA)/kb.da:
 		perl $(DIR_PROGRAMS)/Boxer2Herny.pl --input xaxa.drs --coref xaxa.corenlp --output $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry; \
 		cat $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry >> $(DIR_TMP)/abcorefexp-$(BSFN).henry; \
 	end;
-	python $(DIR_PROGRAMS)/henry2n700.py $(DIR_TMP)/abcorefexp-$(BSFN).henry > $(DIR_TMP)/abcorefexp-$(BSFN).lisp
+	python $(DIR_PROGRAMS)/henry2n700.py $(DIR_TMP)/abcorefexp-$(BSFN).henry \
+	| python -c 'import re, sys; print "\n".join(sorted([x for x in sys.stdin.readlines()], key=lambda x: (x.split()[2].split("_")[1], int(x.split()[2].split( "_" )[-1][:-1])) ) )' \
+	> $(DIR_TMP)/abcorefexp-$(BSFN).lisp
 	mv $(DIR_TMP)/abcorefexp-$(BSFN).lisp $(dir $@)/$(BSFN).lisp
 	mv $(DIR_TMP)/abcorefexp-$(BSFN).henry $(dir $@)/$(BSFN).henry
 	rm $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry xaxa.drs xaxa.tmp.drs xaxa.corenlp;
