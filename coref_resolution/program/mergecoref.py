@@ -27,7 +27,7 @@ def main():
 		for xml_chain in xml_cr.xpath( "chain" ):
 			chain.update( dict( [(int(wordid) if "?" != wordid else 0, xml_chain.attrib["id"]) for wordid in xml_chain.xpath( "wordids" )[0].text.split( "," )] ) )
 
-		#print chain
+		print >>sys.stderr, chain
 		
 		sent_id = 1
 		
@@ -39,10 +39,11 @@ def main():
 			elif ln[0] in ["#begin", "#end"]:
 				pass
 			else:
-				ln[-1] = "-"
+				ln[-1]		= "-"
+				global_id = sent_id * 1000 + int(ln[2])
 				
-				if chain.has_key( sent_id * 1000 + int(ln[2]) ):
-					ln[-1] = "(%s)" % chain[ sent_id * 1000 + int(ln[2]) ]
+				if chain.has_key( global_id ):
+					ln[-1] = "(%s)" % chain[ global_id ]
 
 			#print sent_id
 			print " ".join( ln )

@@ -1,20 +1,24 @@
 
+import argparse
 import sys, re, collections
 
-# Usage:
-#  python conll2011viscoref.py <input_file1> <input_file2> ...
 
 def main():
+	parser = argparse.ArgumentParser( description="CoNLL data visualizer." )
+	parser.add_argument( "--input", help="CoNLL data to be visualized.", nargs="+", default=[sys.stdin], type=file )
+	pa = parser.parse_args()
+
+	if None == pa.input: parser.error( "CoNLL file, please." )
 
 	startPrettyPrint()
 	
-	for fn in sys.argv[1:]:
+	for fs in pa.input:
 		
 		# Read two mappings from the file: Word ID->word, and Word ID->coref chain.
-		words, corefmap = read( open(fn) )
+		for prt, words, corefmap in read( fs ):
 
-		# Output them in HTML format.
-		prettyPrint( words, corefmap, fn )
+			# Output them in HTML format.
+			prettyPrint( words, corefmap, "%s - %s" % (fs.name, prt) )
 
 	endPrettyPrint()
 
@@ -41,17 +45,20 @@ def endPrettyPrint():
 	
 def read( s ):
 	
-	# Unique ID to word mapping
-	# Unique ID to coreference chain ID mapping
-	words    = {}
-	corefmap = collections.defaultdict( list )
-	
 	# Stack for coreference chain
-	nstack   = []
+	doc      = ""
 	
 	for i, ln in enumerate( s ):
 		ln = ln.strip()
 
+		if "#end" in ln: yield doc, words, corefmap
+		
+		if "#begin" in ln:
+			doc			 = ln[ len( "#begin document " ): ]
+			words    = {}
+			corefmap = collections.defaultdict( list )
+			nstack	 = []
+			
 		if "" == ln or ln.startswith("#"): continue
 
 		ln = re.split( "[ ]+", ln.strip() )
@@ -75,7 +82,7 @@ def read( s ):
 		for n in popper:
 			nstack.remove( int(n) )
 
-	return words, corefmap
+	
 
 
 def prettyPrint( words, corefmap, title="" ):

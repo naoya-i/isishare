@@ -46,15 +46,13 @@ EVAL_MEASURE         = muc
 	paste c1 c2 > $@
 	rm c1 c2
 
-%.corefout: %.lisp %.drs %.txt knowledge_base
+%.corefout: %.lisp %.drs %.txt $(DIR_DATA)/kb.da
 	echo '<?xml version="1.0"?>\n<coreference-output>' > $(DIR_TMP)/abcorefexp-$(BSFN).corefout
 	perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt \
 	| parallel -j $(NUM_JOBS) 'python $(DIR_PROGRAMS)/mycoref.py --input $(BSN).lisp --henry $(BSN).henry --drs $(BSN).drs --reasoner $(DIR_REASONER)/bin/henry \
 									--target {} $(OPTIONS) --datadir $(DIR_DATA)' >> $(DIR_TMP)/abcorefexp-$(BSFN).corefout
 	echo '</coreference-output>' >> $(DIR_TMP)/abcorefexp-$(BSFN).corefout
 	mv $(DIR_TMP)/abcorefexp-$(BSFN).corefout $@
-
-knowledge_base: $(DIR_DATA)/kb.da
 
 $(DIR_DATA)/kb.da:
 	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-basic.lisp -o $@
