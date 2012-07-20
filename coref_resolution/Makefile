@@ -18,7 +18,7 @@ DIR_DATA             = ./data
 SHELL = /bin/zsh
 
 # Mmhhmmaaahhhhyyy precious...
-.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.lisp %.conllidx %.corefout %.coref
+.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.lisp %.conllidx %.corefout %.coref %.gold
 
 BSN   = $(basename $@)
 BSFN  = $(basename $(notdir $@))
@@ -26,16 +26,17 @@ BSFN  = $(basename $(notdir $@))
 FILES_CONLL          = find $(DIR_CONLL_DATA)/$(BSFN)/data/english/annotations -name '*.*auto_conll' $(FILES_CONLL_FILTER)
 FILES_CONLL_FILTER   = | head -n2
 
-NUM_JOBS             = 2
+NUM_JOBS             = 16
 EVAL_MEASURE         = muc
 
 # MQP: Main Query Predicate
-%.eval: %.coref
-	cat `$(FILES_CONLL)` > gold.txt
+%.eval: %.coref %.corefout %.gold
 	pwd=$(PWD); \
 	cd $(DIR_CONLL_SCORER); \
-	perl scorer.pl $(EVAL_MEASURE) $$pwd/gold.txt $$pwd/$(BSN).coref;
-	#rm gold.txt
+	perl scorer.pl $(EVAL_MEASURE) $$pwd/$(BSN).gold $$pwd/$(BSN).coref;
+
+%.gold:
+	cat `$(FILES_CONLL)` > $@
 
 %.coref: %.corefout %.conllidx
 	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).corefout --conll-index $(BSN).conllidx > $@
@@ -60,15 +61,17 @@ $(DIR_DATA)/kb.da:
 %.lisp: %.drs %.corenlp
 	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
 		echo 'Hello,' $$file;\
-		python -c "import sys, re; print \"\n\".join( re.findall(\"%%%[^\n]+\nid\('"$$file"_[0-9]+',[0-9]+\)\.\n.*?\n\n\", sys.stdin.read(), re.DOTALL) )" < $(BSN).drs > xaxa.tmp.drs; \
+		python -c "import sys, re; print \"\n\".join( re.findall(\"id\('"$$file"_[0-9]+',[0-9]+\)\.\n.*?\n\n\", sys.stdin.read(), re.DOTALL) )" < $(BSN).drs > xaxa.tmp.drs; \
 		python -c "import sys, re; print re.findall(\"#begin "$$file"\n(.*?)#end\", sys.stdin.read(), re.DOTALL)[0]" < $(BSN).corenlp > xaxa.corenlp; \
 		baseid=`perl -nle 'print $$1 if /^([0-9]+) /' xaxa.tmp.drs | head -n1`; \
-		python $(DIR_PROGRAMS)/shiftdrs.py --input xaxa.tmp.drs --baseid $$baseid > xaxa.drs; \
+		basesid=`perl -nle 'print $$1 if /,([0-9]+)/' xaxa.tmp.drs | head -n1`; \
+		python $(DIR_PROGRAMS)/shiftdrs.py --input xaxa.tmp.drs --baseid $$baseid --basesentid $$basesid > xaxa.drs; \
 		perl $(DIR_PROGRAMS)/Boxer2Herny.pl --input xaxa.drs --coref xaxa.corenlp --output $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry; \
 		cat $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry >> $(DIR_TMP)/abcorefexp-$(BSFN).henry; \
 	end;
 	python $(DIR_PROGRAMS)/henry2n700.py $(DIR_TMP)/abcorefexp-$(BSFN).henry \
-	| python -c 'import re, sys; print "\n".join(sorted([x for x in sys.stdin.readlines()], key=lambda x: (x.split()[2].split("_")[1], int(x.split()[2].split( "_" )[-1][:-1])) ) )' \
+	| python -c 'import re, sys; print "".join( sorted( [x for x in sys.stdin.readlines()], key=lambda x: (x.split()[2][:-1].split("-")[0], int(x.split()[2][:-1].split("\
+	_")[-1]) if "" != x.split()[2][:-1] else 0 ) ) )' \
 	> $(DIR_TMP)/abcorefexp-$(BSFN).lisp
 	mv $(DIR_TMP)/abcorefexp-$(BSFN).lisp $(dir $@)/$(BSFN).lisp
 	mv $(DIR_TMP)/abcorefexp-$(BSFN).henry $(dir $@)/$(BSFN).henry

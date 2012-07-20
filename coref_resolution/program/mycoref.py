@@ -23,7 +23,13 @@ def mycoref( target, pa ):
 	chain_id = 0
 	
 	for obs_sent in re.findall( "(%s_[0-9]+)\]" % target, henry ):
-		xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 3 -p %s -t 8 -b %s/kb.da -i cpi" % ( pa.reasoner, pa.input[0], obs_sent, pa.datadir[0] ) ) )
+		try:
+			xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 1 -T 10 -p %s -t 8 -b %s/kb.da -i cpi" % ( pa.reasoner, pa.input[0], obs_sent, pa.datadir[0] ) ) )
+
+		except:
+			print >>sys.stderr, "Parse error:", target
+			continue
+		
 		hypothesis			= xml_ret.xpath( "/henry-output/result-inference/hypothesis" )[0].text
 		
 		for lit in hypothesis.split( " ^ " ):

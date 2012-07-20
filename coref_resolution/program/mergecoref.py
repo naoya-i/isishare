@@ -1,5 +1,4 @@
 
-
 from lxml import etree
 
 import argparse, sys, os, re
@@ -30,8 +29,13 @@ def main():
 		print >>sys.stderr, chain
 		
 		sent_id = 1
+		text_id  = xml_cr.attrib[ "text" ].split("-")[0]
+
+		if not mapper.has_key( text_id ):
+			print >>sys.stderr, "Error:", text_id
+			continue
 		
-		for ln in open( mapper[ xml_cr.attrib[ "text" ].split("-")[0] ] ):
+		for ln in open( mapper[ text_id ] ):
 			ln = ln.split()
 			
 			if len(ln) == 0:
@@ -43,7 +47,11 @@ def main():
 				global_id = sent_id * 1000 + int(ln[2])
 				
 				if chain.has_key( global_id ):
-					ln[-1] = "(%s)" % chain[ global_id ]
+					if chain.get( global_id-1 ) != chain[ global_id ]: ln[-1] = "(%s" % chain[ global_id ]
+					if chain.get( global_id+1 ) != chain[ global_id ]:
+						if "-" == ln[-1]: ln[-1] = "%s)" % chain[ global_id ]
+						else:             ln[-1] += ")"
+					
 
 			#print sent_id
 			print " ".join( ln )

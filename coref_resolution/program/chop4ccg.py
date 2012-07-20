@@ -14,10 +14,10 @@ def main():
 			sent2text.update( dict( [(x, text_id) for x in sentence_ids.split( ", " )] ) )
 
 		the_ccg = re.sub( "id\( '(.*?)', \[(.*?)\]\)\.", "", the_ccg )
-			
-		def _replacer(x):
+
+		def replacer(x):
 			return "id( '%s_%s', [%s] ).\n\nccg(%s," % (sent2text[ x.group(1) ], x.group(1), x.group(1), x.group(1))
 		
-		print re.sub( "ccg\(([0-9]+),", _replacer, the_ccg )
+		print re.sub( "ccg\(([0-9]+),", replacer, the_ccg )
 
 if "__main__" == __name__: main()

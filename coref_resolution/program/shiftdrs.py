@@ -6,6 +6,7 @@ def main():
 	parser = argparse.ArgumentParser( description="DRS id shifter." )
 	parser.add_argument( "--input", help="DRS file.", nargs="+", type=file, default=[sys.stdin] )
 	parser.add_argument( "--baseid", help="Base ID.", type=int )
+	parser.add_argument( "--basesentid", help="Base Sentence ID.", type=int )
 
 	pa = parser.parse_args()
 
@@ -16,7 +17,7 @@ def main():
 		for ln in f:
 			ln = ln.rstrip()
 
-			ln = re.sub( "^id\((.*?),([0-9]+)\)", lambda m: "id(%s,%d)" % (m.group(1), 1+int(m.group(2))-pa.baseid/1000), ln )
+			ln = re.sub( "^id\((.*?),([0-9]+)\)", lambda m: "id(%s,%d)" % (m.group(1), 1+int(m.group(2))-pa.basesentid), ln )
 			ln = re.sub( "^([0-9]+) ", lambda m: "%d " % (int(m.group(1)) - pa.baseid+1000), ln )
 			ln = re.sub( "\[([0-9,]+)\]:", lambda m: "[%s]:" % ",".join([str(int(x) - pa.baseid+1000) for x in m.group(1).split(",")]), ln )
 
