@@ -2,7 +2,7 @@
 #
 #   *  Please specify the following directories, or specify them when you run make.  *
 #
-DIR_REASONER         = $(HOME)/tmp/henry-n700
+DIR_REASONER         = $(HOME)/work/henry-n700
 DIR_CONLL_DATA       = $(HOME)/tmp/conll2011/conll-2011/v2/data
 DIR_CONLL_SCORER     = $(HOME)/tmp/conll2011/conll-2011/scorer/v4
 DIR_CANDC            = /home/work/tools/ubuntu/semantic_parser/candc
@@ -24,7 +24,7 @@ BSN   = $(basename $@)
 BSFN  = $(basename $(notdir $@))
 
 FILES_CONLL          = find $(DIR_CONLL_DATA)/$(BSFN)/data/english/annotations -name '*.*auto_conll' $(FILES_CONLL_FILTER)
-FILES_CONLL_FILTER   = | head -n2
+FILES_CONLL_FILTER   = | head -n50
 
 NUM_JOBS             = 16
 EVAL_MEASURE         = muc
@@ -51,7 +51,7 @@ EVAL_MEASURE         = muc
 	echo '<?xml version="1.0"?>\n<coreference-output>' > $(DIR_TMP)/abcorefexp-$(BSFN).corefout
 	perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt \
 	| parallel -j $(NUM_JOBS) 'python $(DIR_PROGRAMS)/mycoref.py --input $(BSN).lisp --henry $(BSN).henry --drs $(BSN).drs --reasoner $(DIR_REASONER)/bin/henry \
-									--target {} $(OPTIONS) --datadir $(DIR_DATA)' >> $(DIR_TMP)/abcorefexp-$(BSFN).corefout
+                                                                     --target {} $(OPTIONS) --datadir $(DIR_DATA) --extmod $(DIR_PROGRAMS)/henryext.py' >> $(DIR_TMP)/abcorefexp-$(BSFN).corefout
 	echo '</coreference-output>' >> $(DIR_TMP)/abcorefexp-$(BSFN).corefout
 	mv $(DIR_TMP)/abcorefexp-$(BSFN).corefout $@
 

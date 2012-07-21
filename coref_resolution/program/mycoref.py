@@ -24,7 +24,7 @@ def mycoref( target, pa ):
 	
 	for obs_sent in re.findall( "(%s_[0-9]+)\]" % target, henry ):
 		try:
-			xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 1 -T 10 -p %s -t 8 -b %s/kb.da -i cpi" % ( pa.reasoner, pa.input[0], obs_sent, pa.datadir[0] ) ) )
+			xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 1 -T 10 -p %s -t 8 -b %s/kb.da -i %s -e %s" % ( pa.reasoner, pa.input[0], obs_sent, pa.datadir[0], pa.infmethod, pa.extmod ) ) )
 
 		except:
 			print >>sys.stderr, "Parse error:", target
@@ -57,11 +57,14 @@ def main():
 	parser.add_argument( "--drs", help="File mapping between word ids and henry literals.", type=file )
 	parser.add_argument( "--target", help="Problem to be resolved (e.g. wsj_0020-000).", nargs="+" )
 	parser.add_argument( "--datadir", help="Path to resources.", nargs=1 )
+	parser.add_argument( "--extmod", help="Path to external module." )
+	parser.add_argument( "--infmethod", help="Inference method: cpi or bnb.", default="cpi" )
 	parser.add_argument( "--reasoner", help="Reasoner binary." )
 
 	pa = parser.parse_args()
 
 	if None == pa.reasoner:   parser.error( "Where's the reasoner?" )
+	if None == pa.extmod:     parser.error( "Where's the external module?" )
 	if None == pa.target:     parser.error( "Which problem should I solve?" )
 	if None == pa.datadir:    parser.error( "Where's the resources?" )
 	if None == pa.drs:        parser.error( "Where's the DRS file?" )
