@@ -21,7 +21,7 @@ my $split = 0;
 my $samepred = 0;
 my $sameargs = 0;
 my $modality = 0;
-
+my $warnings = 0;
 
 GetOptions ("input=s" => \$ifile,
 	    "output=s" => \$ofile,
@@ -30,7 +30,8 @@ GetOptions ("input=s" => \$ifile,
             "nedis=s" => \$nefile,
             "cost=s" => \$cost,
             "split=i" => \$split,
-            "nonmerge=s" => \$nonmerge_opt);
+            "nonmerge=s" => \$nonmerge_opt,
+            "warnings=i" => \$warnings);
 
 &setParameters();
 
@@ -58,7 +59,7 @@ close OUT;
 sub add_nm_and_printAll(){
     ## ADD NONMERGE CONSTRAINTS AND PRINT OUT HENRY FORMAT SENCENCE BY SENTENCE
     for my $sid (sort (keys %id2props)){
-	    print "Processing sentence $sid...\n";
+	    #print "Processing sentence $sid...\n";
 	    &add_nonmerge($sid);
 	    &printHenryFormat($sid);
 	    %nonmerge = ();
@@ -74,6 +75,8 @@ sub setParameters(){
    if(($ifile eq "")||($ofile eq "")) {print("Input or output file missing.\n"); &printUsage();}
 
    if(($split!=0)&&($split!=1)) {print("Wrong value of 'split' parameter: $split. Only '0' and '1' accepted.\n"); exit(0);}
+
+   if(($warnings!=0)&&($warnings!=1)) {print("Wrong value of 'warnings' parameter: $warnings. Only '0' and '1' accepted.\n"); exit(0);}
 
    if($cost !~ /\d+(.\d+)?/) {print("Wrong value of 'cost' parameter: $cost. Only real numbers accepted.\n"); exit(0);}
 
@@ -171,22 +174,37 @@ sub read_nedis_file(){
                 my $end_id = $3;
                 my $entity = $4;
 
-                if(($entity ne "--NME--")&&($entity !~ /\\/)){
-                	$nedis_counter++;
+                #REPLACE UNICORE
+                #002d -
+    		#002c ,
+    		#002e .
+    		#0028 (
+    		#0029 )
+    		#0027 '
 
+                $entity =~ s/\\u002d/-/g;
+                $entity =~ s/\\u002c//g;
+                $entity =~ s/\\u002e/\./g;
+                $entity =~ s/\\u0028//g;
+                $entity =~ s/\\u0029//g;
+                $entity =~ s/\\u0027/'/g;
+
+                if($entity ne "--NME--"){
+                	$nedis_counter++;
                 	$nedis_info{$entity}{$nedis_counter}{'sid'} = $sid;
                 	$nedis_info{$entity}{$nedis_counter}{'start'} = $start_id - $count_words_before{$sid};
                 	$nedis_info{$entity}{$nedis_counter}{'end'} = $end_id - $count_words_before{$sid};
                 }
          }
          else{
-         	print "Strange NE line: $line";
+                if($warnings==1){
+                	print "Strange NE line: $line";
+                }
          }
     }
 
     close FILE;
 
-    print "Disambiguated named entities file read.\n";
 }
 
 ###########################################################################
@@ -226,7 +244,9 @@ sub add_coref(){
 	                              $arg = $args[2];
 	                        }
 	                        else{
-	                                print "Another coref element ($sid, $boxer_tid): $pname\n";
+                                        if($warnings==1){
+                                        	print "Another coref element ($sid, $boxer_tid): $pname\n";
+                                        }
 	                        }
 
                                 # REPLACE ARGS WITH A NEW CONSTANT
@@ -575,11 +595,15 @@ sub read_Boxer_file(){
        }
        elsif($line =~ /^id\((.+),\d+\)\./){
            if(($sent_id ne "")&&((scalar keys %id2props)==0)){
-    		print "No props for sent: $sent_id \n";
+                if($warnings==1){
+                	print "No props for sent: $sent_id \n";
+                }
     	   }
 
            if(($sfile eq "")&&($nefile eq "")){
-                print "Processing sentence $sent_id.\n";
+                if($warnings==1){
+                	print "Processing sentence $sent_id.\n";
+                }
 	    	&add_nonmerge($sent_id);
 	   	&printHenryFormat($sent_id);
                 %id2props = ();
@@ -614,7 +638,9 @@ sub read_Boxer_file(){
                 	@args = split(/,/,$3);
                 }
                 else{
-                	print "Strange propositions: $p\n";
+                        if($warnings==1){
+                        	print "Strange propositions: $p\n";
+                        }
                 }
 
                 if($id_str eq ""){
@@ -657,7 +683,9 @@ sub read_Boxer_file(){
                       $newpostfix = "in";
                   }
                   else{
-                  	print "Strange postfix: $prefix-$postfix in sent $sent_id \n";
+                        if($warnings==1){
+                        	print "Strange postfix: $prefix-$postfix in sent $sent_id \n";
+                        }
                         $newpostfix = $postfix;
                   }
 
@@ -737,11 +765,15 @@ sub read_Boxer_file(){
     close IN;
 
     if(($sent_id ne "")&&((scalar keys %id2props)==0)){
-    		print "No props for sent: $sent_id \n";
+                if($warnings==1){
+                	print "No props for sent: $sent_id \n";
+                }
     }
 
     if(($sfile eq "")&&($nefile eq "")){
-    	print "Processing sentence $sent_id.\n";
+        if($warnings==1){
+        	print "Processing sentence $sent_id.\n";
+        }
 	&add_nonmerge($sent_id);
 	&printHenryFormat($sent_id);
         %id2props = ();
