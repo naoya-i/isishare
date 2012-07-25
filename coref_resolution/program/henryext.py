@@ -23,7 +23,7 @@ pa = parser.parse_args( _args )
 
 #
 # Have a welcome drink.
-print >>sys.stderr, "Welcome to discourse processing external module!"
+print >>sys.stderr, "Welcome to a discourse processing module!"
 
 g_mydir		 = os.path.abspath(os.path.dirname(__file__))
 
@@ -88,18 +88,22 @@ def _isExplicitNonIdent( p1p, p1a, p2p, p2a, ti, tip, tj, tjp ):
 	return False
 
 
-def _matchArgs( ps, p, a, v2h ):
+def _matchArgs( funcrel, p, a, v2h ):
 
 	# Determine the first binding.
 	binding = {}
 
-	for funcrel in ps:
-		for pred, args in funcrel[0]:
-			if p == pred:
-				for pos, arg in enumerate( a ):
-					binding[ args[pos] ] = arg
-				
+	for pred, args in funcrel:
+		if p == pred:
+			for pos, arg in enumerate( a ):
+				binding[ args[pos] ] = arg
+
+	# Check the rest.
+	for pos, arg in enumerate( a ):
+		binding[ args[pos] ] = arg
+					
 	return binding
+
 
 def _isEventArg( a, v2h ):
 	for p in v2h.get( a, [] ):
@@ -168,8 +172,9 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 
 				# Is this functional predicates?
 				if g_funcrel.has_key(p1p):
-					args1, args2 = _matchArgs( g_funcrel[p1p], p1p, p1a.split(","), v2h ), _matchArgs( g_funcrel[p1p], p2p, p2a.split(","), v2h )
-					print args1
+					for funcrel in g_funcrel[p1p]:
+						args1, args2 = _matchArgs( funcrel[0], p1p, p1a.split(","), v2h ), _matchArgs( funcrel[0], p2p, p2a.split(","), v2h )
+						print funcrel, args1, p1p
 					
 					# ret += [ (-1, "", [p1id, p2id, args1["y1"], args2["y1"]) ]
 				
