@@ -24,7 +24,7 @@ R_TIMEOUT = 120
 
 graph_iter_vs_loss:
 	perl -nle 'print $$1 if /Total loss: .*? \(avg. = ([0-9.]+)/' $(OUTPUT) | cat -n > tmp1
-	# perl -nle 'print $$1 if /Total loss: .*? \(avg. = ([0-9.]+)/' $(OUTPUT2) | cat -n > tmp2
+	perl -nle 'print $$1 if /Total loss: .*? \(avg. = ([0-9.]+)/' $(OUTPUT2) | cat -n > tmp2
 	# perl -nle 'print $$1 if /Total loss: .*? \(avg. = ([0-9.]+)/' $(OUTPUT3) | cat -n > tmp3
-	echo 'set terminal pdf; set size ratio 1; set xrange [0:$(MAX_ITER)]; set xlabel "Number of Iteration"; set ytics 0.25; set ylabel "Averaged Loss"; plot "tmp1" with lp title "G-CBA", "tmp2" with lp title "$(OUTPUT2)", \
+	echo 'set terminal pdf; set size ratio 1; set xrange [0:$(MAX_ITER)]; set xlabel "Number of Iteration"; set ylabel "Averaged Loss"; plot "tmp1" with lp title "$(OUTPUT)", "tmp2" with lp title "$(OUTPUT2)", \
 	"tmp3" with lp title "$(OUTPUT3)";' | gnuplot > ~/public_html/proofgraph.pdf                                                                                                                                                    

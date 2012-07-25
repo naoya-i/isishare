@@ -2,7 +2,9 @@
 # Henry external module for plan recognition experiment
 #
 
+import argparse
 import sys, re, os
+import henryext
 
 from lxml import etree
 from collections import defaultdict
@@ -13,6 +15,12 @@ def _myfile( x ):
 g_disj = dict( [(x.strip().split()[0] + x.strip().split()[1], None) for x in open( "/home/naoya-i/work/unkconf2012/plan-disj.tsv" ).readlines() ] )
 g_mydir		 = os.path.abspath(os.path.dirname(__file__))
 
+
+
+henryext.cppPrint( "hello, pythonier!" )
+
+def _getArgPos( p, t ):
+	return re.split( "[(,)]", p ).index(t) - 1
 
 #
 # This is a callback function that decides how much two literals li
@@ -26,34 +34,35 @@ def cbGetUnificationEvidence( ti, tj, v2h ):
 
 	# Different constants cannot be unified.
 	if ti != tj and ti[0].isupper() and tj[0].isupper(): return []
-		
-	def _getArgPos( p, t ):
-		return re.split( "[(,)]", p ).index(t) - 1
-	
+			
 	ret = []
 	vret = []
 	
 	for p1 in v2h.get( ti, [] ):
-		p1	 = p1.split( ":" )
-		p1id = int(p1[-1])
+		p1l, p1id = p1.split( ":" )
+		p1p, p1a	= p1l.split( "(" )
+		p1a, p1id	= p1a[:-1], int(p1id)
+		tip       = _getArgPos( p1l, ti )
 		
 		for p2 in v2h.get( tj, [] ):
-			p2	 = p2.split( ":" )
-			p2id = int(p2[-1])
+			p2l, p2id = p2.split( ":" )
+			p2p, p2a	= p2l.split( "(" )
+			p2a, p2id	= p2a[:-1], int(p2id)
+			tjp       = _getArgPos( p2l, tj )
 			
 			#
 			if p1id == p2id or (ti == tj and p1id > p2id): continue
 			
 			# Evidence provided by the same predicate
-			if ti != tj and _getArgPos( p1[0], ti ) == _getArgPos( p2[0], tj ) and p1[0].split("(")[0] == p2[0].split("(")[0]:
+			if ti != tj and tip == tjp and p1p == p2p:
+				ret += [ (-1, "%s:%d" % (p1p, tip), [p1id, p2id]) ]
 
-				# Otherwise, return how frequent the word is.
-				ret += [ (-0.1, [p1id, p2id]) ]
-				vret += [ (p1[0], p2[0]) ]
-
+			# if ti != tj and tip != tjp and p1p == p2p:
+			# 	ret += [ (-1, "%s:%d%d" % (p1p, tip, tjp), [p1id, p2id]) ]
+				
 			# # Disjoint?
-			if g_disj.has_key("%s/1%s/1" % (p1[0].split("(")[0], p2[0].split("(")[0])) or g_disj.has_key("%s/1%s/1" % (p1[0].split("(")[0], p2[0].split("(")[0])):
-				ret += [ (-9999, [p1id, p2id] ) ]
+			if g_disj.has_key("%s/1%s/1" % (p1p, p2p)) or g_disj.has_key("%s/1%s/1" % (p2p,p1p)):
+				ret += [ (-9999, "", [p1id, p2id] ) ]
 
 	#print ti, tj, vret
 	
@@ -63,59 +72,132 @@ def cbGetUnificationEvidence( ti, tj, v2h ):
 #
 def cbGetLoss( system, gold ):
 
-	lfs	 = sorted( _shrink( system.split( " ^ " ) ) )
+	lfs			 = sorted( _shrink( system.split( " ^ " ) ) )
 	gold_not = sorted( filter( lambda x: x.startswith( "!" ), gold.split( " ^ " ) ) )
-	gold = sorted( filter( lambda x: not x.startswith( "!" ), gold.split( " ^ " ) ) )
-	
-	slots, alignments = {}, []
-	_findGoldMatch( alignments, slots, gold, lfs, {} )
+	gold_pos = sorted( filter( lambda x: not x.startswith( "!" ), gold.split( " ^ " ) ) )
 
-	if 0 < len( alignments ):
-		best_alignment = max( alignments, key=lambda x: len(x.keys()) )
-		lfs_bound			 = [_applySignature( lf, best_alignment ) for lf in lfs]
-	else:
-		best_alignment = {}
-		lfs_bound			 = lfs
-
-	correct_set	= set(gold)&set(lfs_bound)
-	
-	gold_predicates		 = [_break(lf)[0] for lf in gold]
-	system_predicates	 = [_break(lf)[0] for lf in lfs]
-	correct_predicates = []
-	missing_predicates = []
-	
-	for p1 in gold_predicates:
-		for p2 in system_predicates:
-			if p1 == p2: correct_predicates += [p1]; break
-		else:
-			missing_predicates += [p1]
-
-	num_correct_args		 = 0
-	num_correct_args_max = 0
-
-	for lf in gold:
-		for t in _break(lf)[1]:
-			if t in best_alignment.values(): num_correct_args += 1
-			num_correct_args_max += 1
+	num_pos_loss, num_neg_loss = 0, 0
 
 	# Loss for negative literals.
-	num_not_loss = 0
-
 	for lit in gold_not:
 		lit = _break( _break(lit)[1][0] + ")" )
-		
-		if lit[0] in system_predicates:
-			print >>sys.stderr, "Negative literal found:", lit[0]
-			num_not_loss += 1
 
-	print >>sys.stderr, "Loss report:"
-	print >>sys.stderr, "# of !:", num_not_loss
-	print >>sys.stderr, "# of slots:", len(slots.keys()) - len(best_alignment.keys())
-	print >>sys.stderr, "# of preds:", (len(gold_predicates) - len(correct_predicates))
+		negatives = filter( lambda x: x.split("(")[0] == lit[0], system.split( " ^ " ) )
+			
+		if len(negatives) > 0:
+			print >>sys.stderr, "Negative literal found:", negatives
+
+		num_neg_loss += len(negatives)
+	
+	slots, alignments = {}, []
+	_findGoldMatch( alignments, slots, gold_pos, lfs, {} )
+
+	if 0 < len( alignments ) and 0 == num_neg_loss: return 0
+
+	return 10
+
+	# 	best_alignment = max( alignments, key=lambda x: len(x.keys()) )
+	# 	lfs_bound			 = [_applySignature( lf, best_alignment ) for lf in lfs]
+	# else:
+	# 	best_alignment = {}
+	# 	lfs_bound			 = lfs
+
+	# correct_set	= set(gold)&set(lfs_bound)
+	
+	gold_predicates			 = [_break(lf)[0] for lf in gold_pos]
+	gold_not_predicates	 = [_break(lf)[0] for lf in gold_not]
+	system_predicates		 = [_break(lf)[0] for lf in lfs]
+	# correct_predicates = []
+	# missing_predicates = []
+	
+	# for p1 in gold_predicates:
+	# 	for p2 in system_predicates:
+	# 		if p1 == p2: correct_predicates += [p1]; break
+	# 	else:
+	# 		missing_predicates += [p1]
+
+	# num_correct_args		 = 0
+	# num_correct_args_max = 0
+
+	# for lf in gold:
+	# 	for t in _break(lf)[1]:
+	# 		if t in best_alignment.values(): num_correct_args += 1
+	# 		num_correct_args_max += 1
+
+	num_pos_loss, num_neg_loss = 0, 0
+
+	# Loss for negative literals.
+	for lit in gold_not:
+		lit = _break( _break(lit)[1][0] + ")" )
+
+		negatives = filter( lambda x: x.split("(")[0] == lit[0], system.split( " ^ " ) )
+			
+		if len(negatives) > 0:
+			print >>sys.stderr, "Negative literal found:", negatives
+
+		num_neg_loss += len(negatives)
+
+	# Loss for positive literals.
+	missing_predicates = []
+	
+	for p in gold_predicates:
+		
+		positives = filter( lambda x: x.split("(")[0] == p, system.split( " ^ " ) )
+
+		if 0 == len(positives):
+			num_pos_loss += 1
+			missing_predicates += [p]
+
+	# Create a mapping
+	v2h				= defaultdict( list )
+	unified   = {}
+	variables = set()
+	
+	for lit in system.split( " ^ " ):
+		for t in _break( lit )[1]:
+			v2h[t]		+= [_break( lit )]
+			variables |= set([t])
+		
+		if lit.startswith( "=" ):
+			for ti in _break(lit)[1]:
+				for tj in _break(lit)[1]:
+					unified[ (ti, tj) ] = None
+					unified[ (tj, ti) ] = None
+		
+	# Loss for variable unification.
+	num_unif_loss = 0
+
+	variables = list(variables)
+	
+	for i, ti in enumerate( variables ):
+		for tj in variables[i+1:]:
+
+			# Is it unified based on the correct evidences?
+			if not unified.has_key( (ti, tj) ):
+				tgp, tgy = "", -1
+				
+				for p in v2h.get( ti, [] ):
+					if p[0] in gold_predicates:
+						tgy = _getArgPos( "%s(%s)" % (p[0], ",".join(p[1])), ti )
+
+						for q in v2h.get( tj, [] ):
+							if q[0] == p[0] and tgy == _getArgPos( "%s(%s)" % (q[0], ",".join(q[1])), tj ):
+								print p[0], ",".join(p[1]), ti, tj
+								num_unif_loss += 1
+								break
+
+					
+		
+	print >>sys.stderr, "-- Loss report --"
+	print >>sys.stderr, "# of -:", num_neg_loss
+	print >>sys.stderr, "# of +:", num_pos_loss
+	print >>sys.stderr, "# of u:", num_unif_loss
 
 	print >>sys.stderr, "missing preds:", missing_predicates
 	
-	return num_not_loss + (len(slots.keys()) - len(best_alignment.keys())) + (len(gold_predicates) - len(correct_predicates))  #(len(gold) - len(correct_set))
+	#return num_neg_loss + (len(slots.keys()) - len(best_alignment.keys())) + (len(gold_predicates) - len(correct_predicates))  #(len(gold) - len(correct_set))
+	#return num_neg_loss + (len(gold) - len(correct_set))
+	return num_pos_loss + num_unif_loss # + num_neg_loss 
 
 
 # "PRED(ARG1, ARG2, ARG3, ...)" => ("PRED", ["ARG1", "ARG2", "ARG3", ...])
