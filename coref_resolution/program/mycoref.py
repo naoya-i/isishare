@@ -24,7 +24,7 @@ def mycoref( target, pa ):
 	
 	for obs_sent in re.findall( "(%s_[0-9]+)\]" % target, henry ):
 		try:
-			xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 2 -T 10 -p %s -t 8 -b %s/kb.da -i %s -e %s" % ( pa.reasoner, pa.input[0], obs_sent, pa.datadir[0], pa.infmethod, pa.extmod ) ) )
+			xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 1 -T 10 -p %s -t 8 -b %s/kb.da -i %s -e %s" % ( pa.reasoner, pa.input[0], obs_sent, pa.datadir[0], pa.infmethod, pa.extmod ) ) )
 
 		except:
 			print >>sys.stderr, "Parse error:", target

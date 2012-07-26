@@ -15,16 +15,19 @@ DIR_DATA             = ./data
 #                             ***
 #
 
-SHELL = /bin/zsh
+
+PREP_OPTIONS = --coref xaxa.corenlp --nedis $(BSDIR)/$$file.aida
+SHELL        = /bin/zsh
 
 # Mmhhmmaaahhhhyyy precious...
 .PRECIOUS: %.drs %.ccg %.txt %.corenlp %.lisp %.conllidx %.corefout %.coref %.gold
 
 BSN   = $(basename $@)
 BSFN  = $(basename $(notdir $@))
+BSDIR = $(dir $@)
 
 FILES_CONLL          = find $(DIR_CONLL_DATA)/$(BSFN)/data/english/annotations -name '*.*auto_conll' $(FILES_CONLL_FILTER)
-FILES_CONLL_FILTER   = | head -n50
+FILES_CONLL_FILTER   = | head -n2
 
 NUM_JOBS             = 16
 EVAL_MEASURE         = muc
@@ -66,7 +69,9 @@ $(DIR_DATA)/kb.da:
 		baseid=`perl -nle 'print $$1 if /^([0-9]+) /' xaxa.tmp.drs | head -n1`; \
 		basesid=`perl -nle 'print $$1 if /,([0-9]+)/' xaxa.tmp.drs | head -n1`; \
 		python $(DIR_PROGRAMS)/shiftdrs.py --input xaxa.tmp.drs --baseid $$baseid --basesentid $$basesid > xaxa.drs; \
-		perl $(DIR_PROGRAMS)/Boxer2Herny.pl --input xaxa.drs --coref xaxa.corenlp --output $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry; \
+		python -c "import re; print re.findall(\"<META> '"$$file"'(.*?)\n\n\", open(\"evaluation/dev.txt\").read(), re.DOTALL)[0]" > $(BSDIR)/$$file.txt; \
+		make $(BSDIR)/$$file.aida; \
+		perl $(DIR_PROGRAMS)/Boxer2Herny.pl --input xaxa.drs $(OPTIONS) --output $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry; \
 		cat $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry >> $(DIR_TMP)/abcorefexp-$(BSFN).henry; \
 	end;
 	python $(DIR_PROGRAMS)/henry2n700.py $(DIR_TMP)/abcorefexp-$(BSFN).henry \
@@ -76,6 +81,9 @@ $(DIR_DATA)/kb.da:
 	mv $(DIR_TMP)/abcorefexp-$(BSFN).lisp $(dir $@)/$(BSFN).lisp
 	mv $(DIR_TMP)/abcorefexp-$(BSFN).henry $(dir $@)/$(BSFN).henry
 	rm $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry xaxa.drs xaxa.tmp.drs xaxa.corenlp;
+
+%.aida:
+	java -jar program/AIDAinterface.jar input:$(BSN).txt output:$@
 
 %.drs: %.ccg
 	$(DIR_CANDC)/bin/boxer --input $(BSN).ccg --resolve true --semantics tacitus > $(DIR_TMP)/abcorefexp-$(BSFN).drs
