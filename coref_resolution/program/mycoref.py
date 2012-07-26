@@ -7,8 +7,9 @@ import argparse, sys, os, re
 
 def mycoref( target, pa ):
 
-	facts = []
-	henry = open( pa.henry[0] ).read()
+	facts	 = []
+	henry	 = open( pa.henry[0] ).read()
+	ninput = open( pa.input[0] ).read()
 	
 	# Load mapping b/w entity variables and word id.
 	map_var_wordid = defaultdict( list)
@@ -19,30 +20,33 @@ def mycoref( target, pa ):
 			map_var_wordid[variables.split(",")[0] if "vb'" in predicate else variables.split(",")[1] ] += [wordid]
 
 	# List the sentences.
-	xml_root = etree.Element( "coreference-result", attrib={"text": target, "sentence": pa.sentence[0]} )
-	chain_id = 0
+	xml_root	 = etree.Element( "coreference-result", attrib={"text": target, "sentence": pa.sentence[0]} )
+	chain_id	 = 0
+	hypothesis = ""
 	
 	try:
-		xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 1 -T 10 -p %s -t 8 -b %s/kb.da -i %s -e %s -f '%s'" % ( pa.reasoner, pa.input[0], pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd ) ) )
+		if None == re.search( "\(name %s\)" % pa.sentence[0], ninput, flags=re.MULTILINE ):
+			print >>sys.stderr, "No sentence found:", pa.sentence[0]
+		else:
+			xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 0 -T 10 -p %s -t 8 -b %s/kb.da -i %s -e %s -f '%s'" % ( pa.reasoner, pa.input[0], pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd ) ) )
+			hypothesis			= xml_ret.xpath( "/henry-output/result-inference/hypothesis" )[0].text
 
+			for lit in hypothesis.split( " ^ " ):
+				if "=(" in lit:
+					xml_chain							 = etree.Element( "chain", attrib={"id": str(chain_id)} ); 	  xml_root.append( xml_chain )
+					xml_chain_vars				 = etree.Element( "variables" ); xml_chain.append( xml_chain_vars )
+					xml_chain_wordids			 = etree.Element( "wordids" );   xml_chain.append( xml_chain_wordids )
+					xml_chain_vars.text    = re.findall( "=\((.*?)\)", lit )[0]
+					xml_chain_wordids.text = ",".join( [ ",".join(map_var_wordid.get(x, "?")) for x in re.findall( "=\((.*?)\)", lit )[0].split(",") ] )
+
+					chain_id += 1
+
+			xml_root.append( xml_ret.xpath( "/henry-output" )[0] )
+
+			print etree.tostring( xml_root, pretty_print=True )
+			
 	except:
 		print >>sys.stderr, "Parse error:", target
-
-	hypothesis			= xml_ret.xpath( "/henry-output/result-inference/hypothesis" )[0].text
-
-	for lit in hypothesis.split( " ^ " ):
-		if "=(" in lit:
-			xml_chain							 = etree.Element( "chain", attrib={"id": str(chain_id)} ); 	  xml_root.append( xml_chain )
-			xml_chain_vars				 = etree.Element( "variables" ); xml_chain.append( xml_chain_vars )
-			xml_chain_wordids			 = etree.Element( "wordids" );   xml_chain.append( xml_chain_wordids )
-			xml_chain_vars.text    = re.findall( "=\((.*?)\)", lit )[0]
-			xml_chain_wordids.text = ",".join( [ ",".join(map_var_wordid.get(x, "?")) for x in re.findall( "=\((.*?)\)", lit )[0].split(",") ] )
-
-			chain_id += 1
-
-	xml_root.append( xml_ret.xpath( "/henry-output" )[0] )
-		
-	print etree.tostring( xml_root, pretty_print=True )
 			
 	return facts
 

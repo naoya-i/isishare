@@ -16,7 +16,13 @@ def main():
 	if None == pa.conllindex:  parser.error( "CoNLL directory, please." )
 
 	mapper			 = dict( [(x.split()[0].split(".")[0], x.split()[1]) for x in pa.conllindex] )
-	xml_corefout = etree.parse( pa.input[0] )
+
+	try:
+		xml_corefout = etree.parse( pa.input[0] )
+		
+	except etree.XMLSyntaxError:
+		print >>sys.stderr, "Parsing Error:", pa.input[0]
+		return
 	
 	for xml_cr in xml_corefout.xpath( "/coreference-output/coreference-result" ):
 
