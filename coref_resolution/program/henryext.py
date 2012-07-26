@@ -2,6 +2,8 @@
 # Henry external module for coreference experiment
 #
 
+from nltk import corpus
+
 import argparse
 import sys, re, os, math
 
@@ -17,6 +19,7 @@ def _myfile( x ):
 parser = argparse.ArgumentParser( description="An external module for coreference experiments.", prog="" )
 parser.add_argument( "--argcons", help="Activate argument constraints.", action="store_true" )
 parser.add_argument( "--condunif", help="Activate conditional unification constraints.", type=file, nargs="+" )
+parser.add_argument( "--waunif", help="Activate weighted unification.", type=file, nargs=1 )
 parser.add_argument( "--nedisj", help="Activate named entities disjointness constraints.", action="store_true" )
 parser.add_argument( "--ineq", help="Activate explicit non-identity constraints.", type=file, nargs="+" )
 
@@ -128,6 +131,36 @@ def _isProperNoun( a, v2h ):
 		if ",%s)" % a in p and p.split("(")[0] in g_boxer_nepreds: return True
 	return False
 
+
+def _getNounLiteral( t, v2h ):
+	for p in v2h.get( t, [] ):
+		if "-nn" in p and "%s)" % t in p: return p
+
+		
+def _isWNSibling( ti, tj, v2h ):
+	pi, pj = _getNounLiteral(ti, v2h), _getNounLiteral(tj, v2h)
+	si, sj = corpus.wordnet.synsets( _break(pi)[0][:-3].replace( "-", "_" ) ), corpus.wordnet.synsets( _break(pj)[0][:-3].replace( "-", "_" ) )
+		
+	def _amIloved( x, y ):
+		if x.name == y.name: return False
+		
+		for z in y.hypernyms():
+			if not _amIloved( x, z ): return False
+
+		return True
+
+	if None != si:
+		return _amIloved( sj[0], si[0] )
+
+	return False
+
+
+def _isSameWNSynset( ti, tj, v2h ):
+	pi, pj = _getNounLiteral(ti, v2h), _getNounLiteral(tj, v2h)
+	si, sj = corpus.wordnet.synsets( _break(pi)[0][:-3].replace( "-", "_" ) ), corpus.wordnet.synsets( _break(pj)[0][:-3].replace( "-", "_" ) )
+	
+	return False if 0 == len(si) or 0 == len(sj) else si[0].name == sj[0].name
+
 #
 # This is a callback function that decides how much two literals li
 # and lj are evidential for the unification ti=tj.
@@ -144,7 +177,11 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 	def _getArgPos( p, t ):
 		return re.split( "[(,)]", p ).index(t) - 1
 
-	if _isProperNoun(ti, v2h) and _isProperNoun(tj, v2h): return []
+	if ti != tj and _isProperNoun(ti, v2h) and _isProperNoun(tj, v2h) and not _isSameWNSynset(ti, tj, v2h):
+		return [ (-10.0, "", [ int(_getNounLiteral(ti, v2h).split(":")[1]), int(_getNounLiteral(tj, v2h).split(":")[1]) ]) ]
+	
+	if ti != tj and _isWNSibling(ti, tj, v2h):
+		return [ (-10.0, "", [ int(_getNounLiteral(ti, v2h).split(":")[1]), int(_getNounLiteral(tj, v2h).split(":")[1]) ]) ]
 	
 	ret = []
 	
@@ -178,10 +215,11 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 				if p1p.endswith( "-rb" ): continue # Adverbs.
 
 				# Is this functional predicates?
-				if g_funcrel.has_key(p1p):
+				if "-in" not in p1p and g_funcrel.has_key(p1p):
 					for funcrel in g_funcrel[p1p]:
 						args1, args2 = _matchArgs( funcrel[0], p1p, p1a.split(","), v2h ), _matchArgs( funcrel[0], p2p, p2a.split(","), v2h )
-					
+
+						print args1, p1p
 					# ret += [ (-1, "", [p1id, p2id, args1["y1"], args2["y1"]) ]
 				
 				# Are ti and tj non-first event arguments?
@@ -205,7 +243,7 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 			if g_disj.has_key("%s/1%s/1" % (p1p, p2p)) or g_disj.has_key("%s/1%s/1" % (p1p, p2p)):
 				ret += [ (-9999, "", [p1id, p2id] ) ]
 
-	#print ti, tj, ret
+	print ti, tj, ret
 	
 	return ret
 

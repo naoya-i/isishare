@@ -27,13 +27,17 @@
 
 ;
 ; DISJOINTNESS.
-
+(O (name wndisj_1) (^ (cat-nn x1) (dog-nn x2) (cute-adj x1) (cute-adj x2) ) )
+(O (name wndisj_2) (^ (puppy-nn x1) (dog-nn x2) (cute-adj x1) (cute-adj x2) ) )
 
 ;
 ; NAMED ENTITIES.
 
 ; Mario jumped. Luigi also jumped. (x1 and x2 should NOT be unified)
-(O (name ne_unify) (^ (mario-nn x1) (luigi-nn x2) (jump-vb e1 x1 u1 u2) (jump-vb e2 x2 u3 u4) (per e3 x1) (per e4 x2) ) )
+(O (name ne_unify_1) (^ (mario-nn x1) (luigi-nn x2) (jump-vb e1 x1 u1 u2) (jump-vb e2 x2 u3 u4) (per e3 x1) (per e4 x2) ) )
+
+; Lennon jumped. John Lennon jumped. (x1 and x2 should be unified)
+(O (name ne_unify_2) (^ (lennon-nn x1) (john-lennon-nn x2) (jump-vb e1 x1 u1 u2) (jump-vb e2 x2 u3 u4) (per e3 x1) (per e4 x2) ) )
 
 ;
 ; FUNCTIONAL RELATIONS.
