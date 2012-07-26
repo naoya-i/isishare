@@ -3,7 +3,7 @@
 #   *  Please specify the following directories, or specify them when you run make.  *
 #
 DIR_REASONER         = $(HOME)/work/henry-n700
-DIR_CONLL_DATA       = $(HOME)/tmp/conll2011/conll-2011/v2/data
+DIR_CONLL            = $(HOME)/tmp/conll2011/conll-2011
 DIR_CONLL_SCORER     = $(HOME)/tmp/conll2011/conll-2011/scorer/v4
 DIR_CANDC            = /home/work/tools/ubuntu/semantic_parser/candc
 DIR_STANFORD_CORENLP = $(HOME)/tmp/stanford-corenlp-2012-07-09
@@ -20,100 +20,85 @@ PREP_OPTIONS = --coref xaxa.corenlp --nedis $(BSDIR)/$$file.aida
 SHELL        = /bin/zsh
 
 # Mmhhmmaaahhhhyyy precious...
-.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.lisp %.conllidx %.corefout %.coref %.gold
+.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.henry %.lisp %.conllidx %.sentcoref %.coref %.gold %.aida
 
 BSN   = $(basename $@)
 BSFN  = $(basename $(notdir $@))
 BSDIR = $(dir $@)
 
-FILES_CONLL          = find $(DIR_CONLL_DATA)/$(BSFN)/data/english/annotations -name '*.*auto_conll' $(FILES_CONLL_FILTER)
-FILES_CONLL_FILTER   = | head -n2
-
 NUM_JOBS             = 16
 EVAL_MEASURE         = muc
 
 # MQP: Main Query Predicate
-%.eval: %.coref %.corefout %.gold
+%.eval: %.conll %.coref %.gold
 	pwd=$(PWD); \
 	cd $(DIR_CONLL_SCORER); \
-	perl scorer.pl $(EVAL_MEASURE) $$pwd/$(BSN).gold $$pwd/$(BSN).coref;
+	perl scorer.pl $(EVAL_MEASURE) $$pwd/$(BSN).gold $$pwd/$(BSN).conll;
 
 %.gold:
-	cat `$(FILES_CONLL)` > $@
+	file="$(BSFN)"; file=$${file%%-*}; \
+	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` > $@
 
-%.coref: %.corefout %.conllidx
-	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).corefout --conll-index $(BSN).conllidx > $@
+%.conll: %.coref conll.idx
+	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).coref --conll-index conll.idx > $@
 
-%.conllidx:
-	$(FILES_CONLL) | perl -nle 'print $$1 if /\/([^\/]+\..*?)$$/' > c1
-	$(FILES_CONLL) > c2
+conll.idx:
+	find $(DIR_CONLL) -name '*_auto_conll' | perl -nle 'print $$1 if /\/([^\/]+\..*?)$$/' > c1
+	find $(DIR_CONLL) -name '*_auto_conll' > c2
 	paste c1 c2 > $@
 	rm c1 c2
 
-%.corefout: %.lisp %.drs %.txt $(DIR_DATA)/kb.da
-	echo '<?xml version="1.0"?>\n<coreference-output>' > $(DIR_TMP)/abcorefexp-$(BSFN).corefout
-	perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt \
-	| parallel -j $(NUM_JOBS) 'python $(DIR_PROGRAMS)/mycoref.py --input $(BSN).lisp --henry $(BSN).henry --drs $(BSN).drs --reasoner $(DIR_REASONER)/bin/henry \
-                                                                     --target {} $(OPTIONS) --datadir $(DIR_DATA) --extmod $(DIR_PROGRAMS)/henryext.py' >> $(DIR_TMP)/abcorefexp-$(BSFN).corefout
-	echo '</coreference-output>' >> $(DIR_TMP)/abcorefexp-$(BSFN).corefout
-	mv $(DIR_TMP)/abcorefexp-$(BSFN).corefout $@
+%~0.sentcoref:
+	echo
+
+%.sentcoref:
+	make `python -c 'x="$(BSN)".split("~"); print "%s~%s" % ("~".join(x[:-1]), int(x[-1])-1)'`.sentcoref
+	sentid=`python -c 'print "$(BSFN)".split("~")[-1]'`; \
+	bsn="$(BSN)";   bsn=$${bsn%%~*}; \
+	bsfn="$(BSFN)"; bsfn=$${bsfn%%~*}; \
+	python $(DIR_PROGRAMS)/mycoref.py\
+	  --input $$bsn.lisp --henry $$bsn.henry --drs $$bsn.drs --reasoner $(DIR_REASONER)/bin/henry \
+	  --target $$bsfn --sentence $$sentid $(OPTIONS) --datadir $(DIR_DATA) --extmod $(DIR_PROGRAMS)/henryext.py \
+	  > $@
+	#  --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' > $@
+
+%.coref: %.lisp %.drs %.txt $(DIR_DATA)/kb.da
+	make $(BSN)~`perl -nle 'print $$1 if /\(O \(name (.*?)\)/' $(BSN).lisp | sort -rn | head -n1`.sentcoref
+	echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<coreference-output>" > $@
+	cat  $(BSN)~*.sentcoref >> $@
+	echo "</coreference-output>" >> $@
 
 $(DIR_DATA)/kb.da:
 	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-basic.lisp -o $@
 
-%.lisp: %.drs %.corenlp
-	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
-		echo 'Hello,' $$file;\
-		python -c "import sys, re; print \"\n\".join( re.findall(\"id\('"$$file"_[0-9]+',[0-9]+\)\.\n.*?\n\n\", sys.stdin.read(), re.DOTALL) )" < $(BSN).drs > xaxa.tmp.drs; \
-		python -c "import sys, re; print re.findall(\"#begin "$$file"\n(.*?)#end\", sys.stdin.read(), re.DOTALL)[0]" < $(BSN).corenlp > xaxa.corenlp; \
-		baseid=`perl -nle 'print $$1 if /^([0-9]+) /' xaxa.tmp.drs | head -n1`; \
-		basesid=`perl -nle 'print $$1 if /,([0-9]+)/' xaxa.tmp.drs | head -n1`; \
-		python $(DIR_PROGRAMS)/shiftdrs.py --input xaxa.tmp.drs --baseid $$baseid --basesentid $$basesid > xaxa.drs; \
-		python -c "import re; print re.findall(\"<META> '"$$file"'(.*?)\n\n\", open(\"evaluation/dev.txt\").read(), re.DOTALL)[0]" > $(BSDIR)/$$file.txt; \
-		make $(BSDIR)/$$file.aida; \
-		perl $(DIR_PROGRAMS)/Boxer2Herny.pl --input xaxa.drs $(OPTIONS) --output $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry; \
-		cat $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry >> $(DIR_TMP)/abcorefexp-$(BSFN).henry; \
-	end;
-	python $(DIR_PROGRAMS)/henry2n700.py $(DIR_TMP)/abcorefexp-$(BSFN).henry \
-	| python -c 'import re, sys; print "".join( sorted( [x for x in sys.stdin.readlines()], key=lambda x: (x.split()[2][:-1].split("-")[0], int(x.split()[2][:-1].split("\
-	_")[-1]) if "" != x.split()[2][:-1] else 0 ) ) )' \
-	> $(DIR_TMP)/abcorefexp-$(BSFN).lisp
-	mv $(DIR_TMP)/abcorefexp-$(BSFN).lisp $(dir $@)/$(BSFN).lisp
-	mv $(DIR_TMP)/abcorefexp-$(BSFN).henry $(dir $@)/$(BSFN).henry
-	rm $(DIR_TMP)/abcorefexp-$(BSFN).tmp.henry xaxa.drs xaxa.tmp.drs xaxa.corenlp;
+%.lisp: %.henry
+	python $(DIR_PROGRAMS)/henry2n700.py $(BSN).henry | sort -nk3,3 > $@
+
+%.henry: %.drs %.corenlp %.aida
+	perl $(DIR_PROGRAMS)/Boxer2Herny.pl --coref $(BSN).corenlp --nedis $(BSN).aida --input $(BSN).drs --output $@
 
 %.aida:
 	java -jar program/AIDAinterface.jar input:$(BSN).txt output:$@
 
 %.drs: %.ccg
-	$(DIR_CANDC)/bin/boxer --input $(BSN).ccg --resolve true --semantics tacitus > $(DIR_TMP)/abcorefexp-$(BSFN).drs
-	mv $(DIR_TMP)/abcorefexp-$(BSFN).drs $(dir $@)/$(BSFN).drs
+	$(DIR_CANDC)/bin/boxer --input $(BSN).ccg --resolve true --semantics tacitus > $@
 
 %.ccg: %.txt
-	$(DIR_CANDC)/bin/candc --models $(DIR_CANDC)/models/boxer --candc-printer boxer --input $(BSN).txt > $(DIR_TMP)/abcorefexp-$(BSFN).sentall.ccg
-	python $(DIR_PROGRAMS)/chop4ccg.py --input $(DIR_TMP)/abcorefexp-$(BSFN).sentall.ccg > $@
-	mv $(DIR_TMP)/abcorefexp-$(BSFN).sentall.ccg $(dir $@)/$(BSFN).sentall.ccg
+	$(DIR_CANDC)/bin/candc --models $(DIR_CANDC)/models/boxer --candc-printer boxer --input $(BSN).txt > $@
+
+%.tok: %.txt
+	mypath=$(PWD); cd $(DIR_STANFORD_CORENLP); \
+	java -cp stanford-corenlp-2012-07-09.jar:stanford-corenlp-2012-07-06-models.jar:xom.jar:joda-time.jar \
+	  -Xmx3g edu.stanford.nlp.pipeline.StanfordCoreNLP -threads $(NUM_JOBS) -annotators tokenize,ssplit -file $$mypath/$(BSN).txt -outputDirectory $$mypath/$(BSDIR)
+	perl $(DIR_PROGRAMS)/extract_tokenization.pl --input $(BSN).txt.xml --output $@
 
 %.txt:
-	python $(DIR_PROGRAMS)/conll2txt.py --input `$(FILES_CONLL)` --format candc > $(DIR_TMP)/abcorefexp-$(BSFN).txt
-	mv $(DIR_TMP)/abcorefexp-$(BSFN).txt $(dir $@)/$(BSFN).txt
+	f=$(BSFN); python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) \
+	  --input `find $(DIR_CONLL)/*/data -name "$${f%%-*}.*_auto_conll"` > $@
 
 %.corenlp: %.txt
-	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
-		echo "$(DIR_TMP)/abcorefexp-$$file.txt" >> $(DIR_TMP)/abcorefexp-$(BSFN).list.txt; \
-		python -c "import re, sys; print re.findall( \"<META> '$$file'(.*?)\n\n\", sys.stdin.read(), re.DOTALL )[0]" < $(BSN).txt > $(DIR_TMP)/abcorefexp-$${file##*/}.txt; \
-	end;
-	cd $(DIR_STANFORD_CORENLP); \
+	mypath=$(PWD); cd $(DIR_STANFORD_CORENLP); \
 	java -cp stanford-corenlp-2012-07-09.jar:stanford-corenlp-2012-07-06-models.jar:xom.jar:joda-time.jar \
-	     -Xmx3g edu.stanford.nlp.pipeline.StanfordCoreNLP -annotators tokenize,ssplit,pos,lemma,ner,parse,dcoref -filelist $(DIR_TMP)/abcorefexp-$(BSFN).list.txt;
-	echo -n "" > $(BSN).corenlp; \
-	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
-		echo "#begin $${file}" >> $(BSN).corenlp; \
-		cat $(DIR_STANFORD_CORENLP)/abcorefexp-$$file.txt.xml >> $(BSN).corenlp; \
-		echo "#end" >> $(BSN).corenlp; \
-		rm $(DIR_STANFORD_CORENLP)/abcorefexp-$$file.txt.xml; \
-	end;
-	foreach file (`perl -nle "print "'$$1'" if /<META> '(.*?)'/" $(BSN).txt`) \
-		rm $(DIR_TMP)/abcorefexp-$${file##*/}.txt; \
-	end;
-	rm $(DIR_TMP)/abcorefexp-$(BSFN).list.txt
+	  -Xmx3g edu.stanford.nlp.pipeline.StanfordCoreNLP -threads $(NUM_JOBS) \
+	  -annotators tokenize,ssplit,pos,lemma,ner,parse,dcoref -file $$mypath/$(BSN).txt \
+	  -outputDirectory $$mypath/$(BSDIR) -replaceExtension txt -outputExtension .corenlp

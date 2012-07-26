@@ -19,13 +19,15 @@ def _myfile( x ):
 parser = argparse.ArgumentParser( description="An external module for coreference experiments.", prog="" )
 parser.add_argument( "--argcons", help="Activate argument constraints.", action="store_true" )
 parser.add_argument( "--condunif", help="Activate conditional unification constraints.", type=file, nargs="+" )
+parser.add_argument( "--funcrel", help="Activate functional relations constraints.", type=file, nargs=1 )
 parser.add_argument( "--waunif", help="Activate weighted unification.", type=file, nargs=1 )
+parser.add_argument( "--ineq", help="Activate explicit non-identity constraints.", type=file, nargs=1 )
 parser.add_argument( "--nedisj", help="Activate named entities disjointness constraints.", action="store_true" )
-parser.add_argument( "--ineq", help="Activate explicit non-identity constraints.", type=file, nargs="+" )
+parser.add_argument( "--wndisj", help="Activate WordNet-based disjointness constraints.", action="store_true" )
 
 if "argv" in dir(sys): parser.print_help(); sys.exit()
 
-pa = parser.parse_args( _args )
+pa = parser.parse_args( _args.split() )
 
 
 #
@@ -40,42 +42,64 @@ g_funcrel					 = defaultdict( list )
 g_disj						 = {}
 g_explicit_non_ids = []
 
-#
-# RESOURCE: CONDITIONAL UNIFICATION
-g_cu =																																											 \
-		re.findall( "set_condition\((.*?)'/", open( _myfile( "../data/cu-boxer.kb" ) ).read() ) +\
-		re.findall( "set_condition\((.*?)'/", open( _myfile( "../data/cu-adj.kb" ) ).read() )
+if pa.argcons: print >>sys.stderr, "Activated: ARGUMENT CONSTRAINTS"
+if pa.wndisj:  print >>sys.stderr, "Activated: WORDNET DISJOINTNESS CONSTRAINTS"
+if pa.nedisj:  print >>sys.stderr, "Activated: NAMED ENTITIES CONSTRAINTS"
 
 #
+# RESOURCE: CONDITIONAL UNIFICATION
+g_cu = []
+
+if None != pa.condunif:
+	print >>sys.stderr, "Activated: CONDITIONAL UNIFICATION"
+	
+	for f in pa.condunif:
+		g_cu += re.findall( "set_condition\((.*?)'/", f.read() )
+	
+#
 # RESOURCE: WORD FREQUENCY
-g_word_freq	= dict( [(x.split()[1], int(x.split()[3])) for x in open( _myfile( "../data/entriesWithoutCollocates.txt" ) )] )
+g_word_freq	= dict( [(x.split()[1], int(x.split()[3])) for x in pa.waunif[0]] ) if None != pa.waunif else {}
+
+if 0 != len(g_word_freq):
+	print >>sys.stderr, "Activated: WEIGHTED UNIFICATION"
+
 
 #
 # RESOURCE: FUNCTIONAL RELATIONS
-for ln in open( _myfile( "../data/func_relations-patterns.txt" ) ):
-	ln, ln_broken = ln.strip().replace( "'", "" ), [_break(lit) for lit in ln.strip().replace( "'", "" ).split( " & " )]
+g_funcrel = {}
+
+if None != pa.funcrel:
+	print >>sys.stderr, "Activated: FUNCTIONAL RELATIONS"
 	
-	for lit in ln_broken:
-		g_funcrel[ lit[0] ]	+= [(ln_broken, float(ln.split( "\t" )[1] if "\t" in ln else 0.0))]
+	for ln in pa.funcrel[0]:
+		ln, ln_broken = ln.strip().replace( "'", "" ), [_break(lit) for lit in ln.strip().replace( "'", "" ).split( " & " )]
+	
+		for lit in ln_broken:
+			g_funcrel[ lit[0] ]	+= [(ln_broken, float(ln.split( "\t" )[1] if "\t" in ln else 0.0))]
 
 #
 # RESOURCE: INEQUALITIES
-for ln in open( _myfile( "../data/inequality.kb" ) ):
-	ret = re.findall( " ([^ ]+)'\((.*?)\)", ln.strip() )
-	if 0 == len(ret): continue
+g_explicit_non_ids = []
 
-	atoms	= [(x, y.split(",").index( "x" ) if "x" in y else -1, y.split(",").index( "y" ) if "y" in y else -1 ) for x, y in ret]
-	mapper = defaultdict( list )
+if None != pa.ineq:
+	print >>sys.stderr, "Activated: EXPLICIT NON-IDENTITY"
+	
+	for ln in pa.ineq[0]:
+		ret = re.findall( " ([^ ]+)'\((.*?)\)", ln.strip() )
+		if 0 == len(ret): continue
 
-	# For isomorphic processing...
-	if 1 == len(atoms): atoms += [atoms[0]]
-	
-	# Which arguments are expected to same?
-	for predicate, args in ret:
-		for i, arg in enumerate( args.split(",") ):
-			mapper[ arg ] += [i]
-	
-	g_explicit_non_ids += [(atoms, dict( filter( lambda x: 1<len(x[1]), mapper.iteritems() ) ) )]
+		atoms	= [(x, y.split(",").index( "x" ) if "x" in y else -1, y.split(",").index( "y" ) if "y" in y else -1 ) for x, y in ret]
+		mapper = defaultdict( list )
+
+		# For isomorphic processing...
+		if 1 == len(atoms): atoms += [atoms[0]]
+
+		# Which arguments are expected to same?
+		for predicate, args in ret:
+			for i, arg in enumerate( args.split(",") ):
+				mapper[ arg ] += [i]
+
+		g_explicit_non_ids += [(atoms, dict( filter( lambda x: 1<len(x[1]), mapper.iteritems() ) ) )]
 	
 	
 def _isExplicitNonIdent( p1p, p1a, p2p, p2a, ti, tip, tj, tjp ):
@@ -139,6 +163,9 @@ def _getNounLiteral( t, v2h ):
 		
 def _isWNSibling( ti, tj, v2h ):
 	pi, pj = _getNounLiteral(ti, v2h), _getNounLiteral(tj, v2h)
+
+	if None == pi or None == pj: return False
+	
 	si, sj = corpus.wordnet.synsets( _break(pi)[0][:-3].replace( "-", "_" ) ), corpus.wordnet.synsets( _break(pj)[0][:-3].replace( "-", "_" ) )
 		
 	def _amIloved( x, y ):
@@ -149,7 +176,7 @@ def _isWNSibling( ti, tj, v2h ):
 
 		return True
 
-	if None != si:
+	if 0 < len(si) and 0 < len(sj):
 		return _amIloved( sj[0], si[0] )
 
 	return False
@@ -160,6 +187,7 @@ def _isSameWNSynset( ti, tj, v2h ):
 	si, sj = corpus.wordnet.synsets( _break(pi)[0][:-3].replace( "-", "_" ) ), corpus.wordnet.synsets( _break(pj)[0][:-3].replace( "-", "_" ) )
 	
 	return False if 0 == len(si) or 0 == len(sj) else si[0].name == sj[0].name
+
 
 #
 # This is a callback function that decides how much two literals li
@@ -177,10 +205,10 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 	def _getArgPos( p, t ):
 		return re.split( "[(,)]", p ).index(t) - 1
 
-	if ti != tj and _isProperNoun(ti, v2h) and _isProperNoun(tj, v2h) and not _isSameWNSynset(ti, tj, v2h):
+	if pa.nedisj and ti != tj and _isProperNoun(ti, v2h) and _isProperNoun(tj, v2h) and not _isSameWNSynset(ti, tj, v2h):
 		return [ (-10.0, "", [ int(_getNounLiteral(ti, v2h).split(":")[1]), int(_getNounLiteral(tj, v2h).split(":")[1]) ]) ]
 	
-	if ti != tj and _isWNSibling(ti, tj, v2h):
+	if pa.wndisj and ti != tj and _isWNSibling(ti, tj, v2h):
 		return [ (-10.0, "", [ int(_getNounLiteral(ti, v2h).split(":")[1]), int(_getNounLiteral(tj, v2h).split(":")[1]) ]) ]
 	
 	ret = []
@@ -219,7 +247,7 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 					for funcrel in g_funcrel[p1p]:
 						args1, args2 = _matchArgs( funcrel[0], p1p, p1a.split(","), v2h ), _matchArgs( funcrel[0], p2p, p2a.split(","), v2h )
 
-						print args1, p1p
+					#	print args1, p1p
 					# ret += [ (-1, "", [p1id, p2id, args1["y1"], args2["y1"]) ]
 				
 				# Are ti and tj non-first event arguments?
@@ -243,7 +271,7 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 			if g_disj.has_key("%s/1%s/1" % (p1p, p2p)) or g_disj.has_key("%s/1%s/1" % (p1p, p2p)):
 				ret += [ (-9999, "", [p1id, p2id] ) ]
 
-	print ti, tj, ret
+	#print ti, tj, ret
 	
 	return ret
 
