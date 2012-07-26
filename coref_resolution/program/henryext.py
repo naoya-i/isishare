@@ -19,7 +19,11 @@ parser.add_argument( "--argcons", help="Activate argument constraints.", action=
 parser.add_argument( "--condunif", help="Activate conditional unification constraints.", type=file, nargs="+" )
 parser.add_argument( "--nedisj", help="Activate named entities disjointness constraints.", action="store_true" )
 parser.add_argument( "--ineq", help="Activate explicit non-identity constraints.", type=file, nargs="+" )
+
+if "argv" in dir(sys): parser.print_help(); sys.exit()
+
 pa = parser.parse_args( _args )
+
 
 #
 # Have a welcome drink.
@@ -99,8 +103,11 @@ def _matchArgs( funcrel, p, a, v2h ):
 				binding[ args[pos] ] = arg
 
 	# Check the rest.
-	for pos, arg in enumerate( a ):
-		binding[ args[pos] ] = arg
+	# for pred, args in funcrel:
+	# 	if p != pred:
+	# 		for p in v2h.get( p, 
+	# 	for pos, arg in enumerate( a ):
+	# 		binding[ args[pos] ] = arg
 					
 	return binding
 
@@ -174,7 +181,6 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 				if g_funcrel.has_key(p1p):
 					for funcrel in g_funcrel[p1p]:
 						args1, args2 = _matchArgs( funcrel[0], p1p, p1a.split(","), v2h ), _matchArgs( funcrel[0], p2p, p2a.split(","), v2h )
-						print funcrel, args1, p1p
 					
 					# ret += [ (-1, "", [p1id, p2id, args1["y1"], args2["y1"]) ]
 				
