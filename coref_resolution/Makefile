@@ -24,7 +24,7 @@ PREP_OPTIONS = --coref xaxa.corenlp --nedis $(BSDIR)/$$file.aida
 SHELL        = /bin/zsh
 
 # Mmhhmmaaahhhhyyy precious...
-.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.henry %.lisp %.conllidx %.sentcoref %.coref %.gold %.aida %.tok
+.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.henry %.lisp %.conllidx %.sentcoref %.coref %.gold %.aida %.tok %.conll %.allconll %.allcoref
 
 BSN   = $(basename $@)
 BSFN  = $(basename $(notdir $@))
@@ -39,12 +39,20 @@ EVAL_MEASURE         = muc
 	cd $(DIR_CONLL_SCORER); \
 	perl scorer.pl $(EVAL_MEASURE) $$pwd/$(BSN).gold $$pwd/$(BSN).conll;
 
+%.evalall: %.allconll %.allcoref %.gold
+	pwd=$(PWD); \
+	cd $(DIR_CONLL_SCORER); \
+	perl scorer.pl $(EVAL_MEASURE) $$pwd/$(BSN).gold $$pwd/$(BSN).allconll;
+
 %.gold:
 	file="$(BSFN)"; file=$${file%%-*}; \
 	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@
 
 %.conll: %.coref conll.idx
 	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).coref --conll-index conll.idx > $@
+
+%.allconll: %.allcoref conll.idx
+	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).allcoref --conll-index conll.idx > $@
 
 %.exe: conll.docs
 	$(MAKE) `awk '{print "evaluation/" $$0 ".$(BSFN)" }' < conll.docs`
@@ -62,15 +70,15 @@ conll.idx:
 	echo
 
 %.sentcoref:
-	make `python -c 'x="$(BSN)".split("~"); print "%s~%s" % ("~".join(x[:-1]), int(x[-1])-1)'`.sentcoref
+	$(MAKE) `python -c 'x="$(BSN)".split("~"); print "%s~%s" % ("~".join(x[:-1]), int(x[-1])-1)'`.sentcoref
 	sentid=`python -c 'print "$(BSFN)".split("~")[-1]'`; \
 	bsn="$(BSN)";   bsn=$${bsn%%~*}; \
 	bsfn="$(BSFN)"; bsfn=$${bsfn%%~*}; \
 	python $(DIR_PROGRAMS)/mycoref.py\
 	  --input $$bsn.lisp --henry $$bsn.henry --drs $$bsn.drs --reasoner $(DIR_REASONER)/bin/henry \
 	  --target $$bsfn --sentence $$sentid $(OPTIONS) --datadir $(DIR_DATA) --extmod $(DIR_PROGRAMS)/henryext.py \
-	  > $@
-	#  --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' > $@
+	  --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' >> $@
+	#  > $@
 
 %.allcoref: %.lisp
 	echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<coreference-output>" > $@
@@ -79,11 +87,12 @@ conll.idx:
 	python $(DIR_PROGRAMS)/mycoref.py\
 	  --input $$bsn.lisp --henry $$bsn.henry --drs $$bsn.drs --reasoner $(DIR_REASONER)/bin/henry \
 	  --target $$bsfn --sentence 0 $(OPTIONS) --datadir $(DIR_DATA) --extmod $(DIR_PROGRAMS)/henryext.py \
-	  > $@
+	  --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' >> $@
+	#  >> $@
 	echo "</coreference-output>" >> $@
 
 %.coref: %.lisp %.drs %.txt $(DIR_DATA)/kb.da
-	make $(BSN)~`perl -nle 'print $$1 if /\(O \(name (.*?)\)/' $(BSN).lisp | sort -rn | head -n1`.sentcoref
+	$(MAKE) $(BSN)~`perl -nle 'print $$1 if /\(O \(name (.*?)\)/' $(BSN).lisp | sort -rn | head -n1`.sentcoref
 	echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<coreference-output>" > $@
 	cat  $(BSN)~*.sentcoref >> $@
 	echo "</coreference-output>" >> $@

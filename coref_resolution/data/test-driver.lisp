@@ -42,5 +42,8 @@
 ;
 ; FUNCTIONAL RELATIONS.
 
-; Place 1 is the capital of German. Place 2 is the capital of Japan. (x1 and x2 should NOT be unified)
-(O (name funcrel_unify) (^ (place-nn x1) (place-nn x2) (capital-nn e1 x3) (of-in e2 x3 x4) (german-nn x4) (capital-nn e3 x5) (of-in e4 x5 x6) (japan-nn x6) ) )
+; Place 1 is the capital of German. Place 2 is the capital of German. (x1 and x2 should NOT be unified)
+(O (name funcrel_unify_1) (^ (place-nn e1 x1) (equal eq1 x1 x3) (place-nn e2 x2) (equal eq2 x2 x5) (capital-nn e3 x3) (of-in e4 x3 x4) (german-nn e5 x4) (country-nn e6 x4) (capital-nn e7 x5) (of-in e8 x5 x6) (japan-nn e9 x6) (country-nn e10 x6) ) )
+
+; Place 1 is the capital of German. Place 2 is the capital of German. (x1 and x2 should be unified)
+(O (name funcrel_unify_2) (^ (place-nn e1 x1) (equal eq1 x1 x3) (place-nn e2 x2) (equal eq2 x2 x5) (capital-nn e3 x3) (of-in e4 x3 x4) (german-nn e5 x4) (country-nn e6 x4) (capital-nn e7 x5) (of-in e8 x5 x4) ) )

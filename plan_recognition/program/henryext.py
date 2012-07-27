@@ -12,12 +12,10 @@ from collections import defaultdict
 def _myfile( x ):
 	return os.path.join( g_mydir, x )
 
-g_disj = dict( [(x.strip().split()[0] + x.strip().split()[1], None) for x in open( "/home/naoya-i/work/unkconf2012/plan-disj.tsv" ).readlines() ] )
+g_disj = dict( [(x.strip(), None) for x in open( "/home/naoya-i/work/unkconf2012/plan-disj.tsv" ).readlines() ] )
 g_mydir		 = os.path.abspath(os.path.dirname(__file__))
 
 
-
-henryext.cppPrint( "hello, pythonier!" )
 
 def _getArgPos( p, t ):
 	return re.split( "[(,)]", p ).index(t) - 1
@@ -32,39 +30,41 @@ def _getArgPos( p, t ):
 #
 def cbGetUnificationEvidence( ti, tj, v2h ):
 
+	#print "hello", abc
+	
+ 	# for p1 in 
+	# 	print p1
+	
 	# Different constants cannot be unified.
 	if ti != tj and ti[0].isupper() and tj[0].isupper(): return []
 			
 	ret = []
 	vret = []
 	
-	for p1 in v2h.get( ti, [] ):
-		p1l, p1id = p1.split( ":" )
-		p1p, p1a	= p1l.split( "(" )
-		p1a, p1id	= p1a[:-1], int(p1id)
-		tip       = _getArgPos( p1l, ti )
-		
-		for p2 in v2h.get( tj, [] ):
-			p2l, p2id = p2.split( ":" )
-			p2p, p2a	= p2l.split( "(" )
-			p2a, p2id	= p2a[:-1], int(p2id)
-			tjp       = _getArgPos( p2l, tj )
+	for argpos in xrange(1, 7):
+
+		# if 1 == argpos:
+		# 	#for pp in g_disj.keys():
+		# 	for literals in henryext.getPotentialElementalHypotheses( "SELECT p1.*, p2.* FROM pehypothesis AS p1, pehypothesis AS p2 WHERE (%s) AND p1.predicate != p2.predicate AND (%s)" % (" OR ".join([ "(p1.predicate = '%s' OR p2.predicate = '%s')" % (x.split()[0][:-2], x.split()[1][:-2]) for x in g_disj.keys()]), "(p1.arg%d = '%s' AND p2.arg%d = '%s')" % (argpos,ti,argpos,tj) ) ):
+		# 		pass #print literals
 			
-			#
-			if p1id == p2id or (ti == tj and p1id > p2id): continue
+		
+		for literals in henryext.getPotentialElementalHypotheses( "SELECT p1.*, p2.* FROM pehypothesis AS p1, pehypothesis AS p2 WHERE (%s)" % ("(p1.arg%d = '%s' AND p2.arg%d = '%s')" % (argpos,ti,argpos,tj)) ):
+
+			p, q		 = literals[:8], literals[8:]
+			pid, qid = int(p[0]), int(q[0])
+			
+			if pid == qid or (ti == tj and pid > qid): continue
 			
 			# Evidence provided by the same predicate
-			if ti != tj and tip == tjp and p1p == p2p:
-				ret += [ (-1, "%s:%d" % (p1p, tip), [p1id, p2id]) ]
-
-			# if ti != tj and tip != tjp and p1p == p2p:
-			# 	ret += [ (-1, "%s:%d%d" % (p1p, tip, tjp), [p1id, p2id]) ]
+			if p[1] == q[1]:
+				ret += [ (-0.1, "%s:%d" % (p[1], argpos), [pid, qid]) ]
 				
-			# # Disjoint?
-			if g_disj.has_key("%s/1%s/1" % (p1p, p2p)) or g_disj.has_key("%s/1%s/1" % (p2p,p1p)):
-				ret += [ (-9999, "", [p1id, p2id] ) ]
+			# Disjoint?
+			if g_disj.has_key("%s/1\t%s/1" % (p[1], q[1])) or g_disj.has_key("%s/1\t%s/1" % (q[1], p[1])):
+				ret += [ (-9999, "%s,%s" % (p[1], q[1]), [pid, qid] ) ]
 
-	#print ti, tj, vret
+	#print ti, tj, ret
 	
 	return ret
 

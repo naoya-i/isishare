@@ -45,7 +45,7 @@ hosh = {}
 
 for fn in sys.argv[1:]:
 	for ln in open(fn):
-		ln = ln.strip().replace( "'", "" )
+		ln = ln.strip().replace( "'", "" ).replace( ";", "\\;" )
 
 		lnx = re.findall( "(.*?)] (.*)", ln )
 		if 0 == len(lnx): continue

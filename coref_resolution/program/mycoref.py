@@ -28,9 +28,14 @@ def mycoref( target, pa ):
 		if None == re.search( "\(name %s\)" % pa.sentence[0], ninput, flags=re.MULTILINE ):
 			print >>sys.stderr, "No sentence found:", pa.sentence[0]
 		else:
-			xml_ret					= etree.parse( os.popen( "%s -m infer %s -d 0 -T 10 -p %s -t 8 -b %s/kb.da -i %s -e %s -f '%s'" % ( pa.reasoner, pa.input[0], pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd ) ) )
+			ret             = os.popen( "%s -m infer %s -d 0 -T 10 -p %s -t 8 -b %s/kb.da -i %s -e %s -f '%s'" % ( pa.reasoner, pa.input[0], pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd ) ).read()
+			xml_ret					= etree.fromstring( ret )
 			hypothesis			= xml_ret.xpath( "/henry-output/result-inference/hypothesis" )[0].text
 
+			if None == hypothesis:
+				print >>sys.stderr, "?", ret
+				return []
+			
 			for lit in hypothesis.split( " ^ " ):
 				if "=(" in lit:
 					xml_chain							 = etree.Element( "chain", attrib={"id": str(chain_id)} ); 	  xml_root.append( xml_chain )
@@ -45,8 +50,8 @@ def mycoref( target, pa ):
 
 			print etree.tostring( xml_root, pretty_print=True )
 			
-	except:
-		print >>sys.stderr, "Parse error:", target
+	except etree.XMLSyntaxError, inst:
+		print >>sys.stderr, "Parse error:", target, inst, inst.args, ret
 			
 	return facts
 

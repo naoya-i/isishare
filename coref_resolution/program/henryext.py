@@ -6,6 +6,7 @@ from nltk import corpus
 
 import argparse
 import sys, re, os, math
+import henryext
 
 from collections import defaultdict
 
@@ -66,14 +67,14 @@ if 0 != len(g_word_freq):
 
 #
 # RESOURCE: FUNCTIONAL RELATIONS
-g_funcrel = {}
+g_funcrel = defaultdict( list )
 
 if None != pa.funcrel:
 	print >>sys.stderr, "Activated: FUNCTIONAL RELATIONS"
 	
 	for ln in pa.funcrel[0]:
-		ln, ln_broken = ln.strip().replace( "'", "" ), [_break(lit) for lit in ln.strip().replace( "'", "" ).split( " & " )]
-	
+		ln, ln_broken = ln.strip().replace( "'", "" ), [_break(lit) for lit in ln.strip().replace( "'", "" ).split( " & " ) ]
+		
 		for lit in ln_broken:
 			g_funcrel[ lit[0] ]	+= [(ln_broken, float(ln.split( "\t" )[1] if "\t" in ln else 0.0))]
 
@@ -189,6 +190,33 @@ def _isSameWNSynset( ti, tj, v2h ):
 	return False if 0 == len(si) or 0 == len(sj) else si[0].name == sj[0].name
 
 
+# [P(x,y), Q(y,z)] => [(P(a,b), Q(b,c)), (P(d,e), Q(e,f)), ...]
+def _getMatchingSets( query_literals ):
+	eq = defaultdict( list )
+
+	for i, lit in enumerate( query_literals ):
+		for j, term in enumerate( lit[1] ):
+			eq[term] += ["p%d.arg%d" % (1+i, j+1)]
+
+	def _pairwise_eq(x):
+		return " AND ".join( ["%s = %s" % (x[i], x[i+1]) for i in xrange(len(x)-1)] )
+	
+	query = "SELECT * FROM %s WHERE %s" % (
+			", ".join( ["pehypothesis AS p%d" % (1+i) for i in xrange( len(query_literals) )] ),
+			" AND ".join( ["p%d.predicate = '%s'" % (1+i, query_literals[i][0]) for i in xrange( len(query_literals) )] + [_pairwise_eq(x) for x in eq.values() if 1 < len(x)] ) )
+	#print >>sys.stderr, query
+	
+	eq	 = defaultdict(set)
+	inst = henryext.getPotentialElementalHypotheses( query )
+	
+	for literals in inst:
+		
+		for i, lit in enumerate( query_literals ):
+			for j, term in enumerate( lit[1] ):
+				eq[ query_literals[i][1][j] ] |= set( [literals[ i*8 + 2+j ]] )
+				
+	return (eq, inst)
+
 #
 # This is a callback function that decides how much two literals li
 # and lj are evidential for the unification ti=tj.
@@ -198,7 +226,9 @@ def _isSameWNSynset( ti, tj, v2h ):
 #  v2h:            mapping from logical terms to potential elemental hypotheses.
 #
 def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
-
+	
+	#print henryext.getPotentialElementalHypotheses
+	
 	# Different constants cannot be unified.
 	if ti != tj and ti[0].isupper() and tj[0].isupper(): return []
 
@@ -242,14 +272,22 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 				if p1p.endswith( "-in" ): continue # Prepositional phrase.
 				if p1p.endswith( "-rb" ): continue # Adverbs.
 
-				# Is this functional predicates?
+				# Is this functional predicates (excluding prepositions for reducing search space)?
 				if "-in" not in p1p and g_funcrel.has_key(p1p):
-					for funcrel in g_funcrel[p1p]:
-						args1, args2 = _matchArgs( funcrel[0], p1p, p1a.split(","), v2h ), _matchArgs( funcrel[0], p2p, p2a.split(","), v2h )
+					for funcrel, score in g_funcrel[p1p]:
 
-					#	print args1, p1p
-					# ret += [ (-1, "", [p1id, p2id, args1["y1"], args2["y1"]) ]
-				
+						subs, insts = _getMatchingSets(funcrel)
+
+						if 0 < len(subs):
+							print >>sys.stderr, "Hit functional relation:", funcrel, insts, subs
+							print >>sys.stderr, subs["x1"], subs["x2"]
+							
+							if 1 < len(subs["x2"]):
+								print >>sys.stderr, subs["x1"], "should be different."
+
+								if ti in subs["x1"] and tj in subs["x1"]:
+									ret += [(-9999, "", [p1id, p2id])]
+							
 				# Are ti and tj non-first event arguments?
 				if _isEventArg(ti, v2h) and _isEventArg(tj, v2h) and 0 != tip and 0 != tjp:
 					continue
@@ -265,12 +303,13 @@ def cbGetUnificationEvidence( ti, tj, v2h, shallow_search=False ):
 				 	continue
 				
 				# Otherwise, return how frequent the word is.
-				ret += [ (1.0/math.log( g_word_freq.get( p1p, 2 ) ), p1p, [p1id, p2id]) ]
+				ret += [ (-1.0/math.log( g_word_freq.get( p1p, 2 ) )*0.01, p1p, [p1id, p2id]) ]
 
 			# Disjoint?
 			if g_disj.has_key("%s/1%s/1" % (p1p, p2p)) or g_disj.has_key("%s/1%s/1" % (p1p, p2p)):
 				ret += [ (-9999, "", [p1id, p2id] ) ]
 
+		
 	#print ti, tj, ret
 	
 	return ret
