@@ -10,13 +10,14 @@ def main():
 	parser = argparse.ArgumentParser( description="Abductive coreference resolution system." )
 	parser.add_argument( "--input", help="Input in corefout format.", nargs="+", type=file, default=[sys.stdin] )
 	parser.add_argument( "--conll-index", help="Index of CoNLL dataset.", type=file, dest="conllindex" )
-	parser.add_argument( "--gold-mention", help="Assume mention boundary is given.", action="store_true", default=False )
+	parser.add_argument( "--goldmention", help="Assume mentions are given.", action="store_true", default=False )
 
 	pa = parser.parse_args()
 
 	if None == pa.input:     parser.error( "Where's the input file?" )
 	if None == pa.conllindex:  parser.error( "CoNLL directory, please." )
-
+	if False == pa.goldmention: parser.error( "Not supported, yet." )
+	
 	mapper			 = dict( [(x.split()[0].split(".")[0], x.split()[1]) for x in pa.conllindex] )
 	
 	try:
@@ -61,7 +62,6 @@ def main():
 					system_response[n] = int(system_chain[global_id][0])
 																													
 			for n in lndel: current_stack.remove(n)
-
 
 		# Annotate.
 		sent_id				= 1

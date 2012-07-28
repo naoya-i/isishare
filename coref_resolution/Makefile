@@ -49,10 +49,10 @@ EVAL_MEASURE         = muc
 	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@
 
 %.conll: %.coref conll.idx
-	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).coref --conll-index conll.idx > $@
+	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).coref --conll-index conll.idx --goldmention > $@
 
 %.allconll: %.allcoref conll.idx
-	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).allcoref --conll-index conll.idx > $@
+	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).allcoref --conll-index conll.idx --goldmention > $@
 
 %.exe: conll.docs
 	$(MAKE) `awk '{print "evaluation/" $$0 ".$(BSFN)" }' < conll.docs`
