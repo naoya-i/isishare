@@ -29,7 +29,7 @@ def main():
 	
 	for xml_cr in xml_corefout.xpath( "/coreference-output/coreference-result" ):
 
-		text_id = xml_cr.attrib[ "text" ].split("-")[0]
+		text_id, part_id = xml_cr.attrib[ "text" ].split("-")
 
 		# Load the system coref chain.
 		system_chain = defaultdict(list)
@@ -64,17 +64,21 @@ def main():
 			for n in lndel: current_stack.remove(n)
 
 		# Annotate.
-		sent_id				= 1
-		phase					= 0
-		cnt						= {}
-		ref_cnt				= defaultdict(int)
-		current_stack = []
+		sent_id					= 1
+		current_text_id = ""
+		phase						= 0
+		cnt							= {}
+		ref_cnt					= defaultdict(int)
+		current_stack		= []
 		
 		for ln in open( mapper[ text_id ] ):
 			ln	= ln.split()
 			
 			if len(ln) == 0: sent_id += 1;    continue
-			elif ln[0] in ["#begin", "#end"]: print " ".join( ln ); continue
+			elif ln[0] in ["#begin"]: current_text_id = "-".join( re.findall("#begin document \(.*?([a-z]+_[0-9]+)\); part ([0-9]+)", " ".join(ln))[0] )
+
+			if "%s-%s" % (text_id, part_id) != current_text_id: continue
+			if ln[0] in ["#begin", "#end"]: print " ".join( ln ); continue
 			
 			global_id = sent_id * 1000 + int(ln[2])
 			

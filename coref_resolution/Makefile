@@ -24,7 +24,7 @@ PREP_OPTIONS = --coref xaxa.corenlp --nedis $(BSDIR)/$$file.aida
 SHELL        = /bin/zsh
 
 # Mmhhmmaaahhhhyyy precious...
-.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.henry %.lisp %.conllidx %.sentcoref %.coref %.gold %.aida %.tok %.conll %.allconll %.allcoref
+.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.henry %.lisp %.conllidx %.sentcoref %.coref %.gold %.aida %.tok %.conll %.conll-allsent %.coref-allsent %.gold-allsent
 
 BSN   = $(basename $@)
 BSFN  = $(basename $(notdir $@))
@@ -34,32 +34,42 @@ NUM_JOBS             = 16
 EVAL_MEASURE         = muc
 
 # MQP: Main Query Predicate
+%.evaluate:
+	mkdir -p $(BSFN)
+	$(MAKE) $(BSFN).docs
+	$(MAKE) `awk '{print "$(BSFN)/" $$0 ".eval-allsent" }' < $(BSFN).docs`
+	cat $(BSFN)/*.gold-allsent > tmp.gold-allsent
+	cat $(BSFN)/*.conll-allsent > tmp.conll-allsent
+	pwd=$(PWD); \
+	cd $(DIR_CONLL_SCORER); \
+	perl scorer.pl $(EVAL_MEASURE) $$pwd/tmp.gold-allsent $$pwd/tmp.conll-allsent;
+	rm tmp.gold-allsent tmp.conll-allsent
+
 %.eval: %.conll %.coref %.gold
-	pwd=$(PWD); \
-	cd $(DIR_CONLL_SCORER); \
-	perl scorer.pl $(EVAL_MEASURE) $$pwd/$(BSN).gold $$pwd/$(BSN).conll;
+	echo ";-)"
 
-%.evalall: %.allconll %.allcoref %.gold
-	pwd=$(PWD); \
-	cd $(DIR_CONLL_SCORER); \
-	perl scorer.pl $(EVAL_MEASURE) $$pwd/$(BSN).gold $$pwd/$(BSN).allconll;
+%.eval-allsent: %.conll-allsent %.coref-allsent %.gold-allsent
+	echo ";-)"
 
-%.gold: %.allcoref
+%.gold: %.coref
 	file="$(BSFN)"; file=$${file%%-*}; \
-	if grep -q coreference-result $(BSN).allcoref; then; \
+	if grep -q coreference-result $(BSN).coref; then; \
+	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@; \
+	fi
+
+%.gold-allsent: %.coref-allsent
+	file="$(BSFN)"; file=$${file%%-*}; \
+	if grep -q coreference-result $(BSN).coref-allsent; then; \
 	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@; \
 	fi
 
 %.conll: %.coref conll.idx
 	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).coref --conll-index conll.idx --goldmention > $@
 
-%.allconll: %.allcoref conll.idx
-	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).allcoref --conll-index conll.idx --goldmention > $@
+%.conll-allsent: %.coref-allsent conll.idx
+	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).coref-allsent --conll-index conll.idx --goldmention > $@
 
-%.exe: conll.docs
-	$(MAKE) `awk '{print "evaluation/" $$0 ".$(BSFN)" }' < conll.docs`
-
-conll.docs:
+%.docs:
 	cat `find $(DIR_CONLL)/*/data/dev/data/english/annotations/*/*/*/ -name '*auto_conll'` | perl -nle "print \$$1 . '_' . \$$2 . '-' . \$$3 if /\/([a-z]+)_(.*?)\); part ([0-9]+)/" $(DOCS_FILTER) > $@
 
 conll.idx:
@@ -82,7 +92,7 @@ conll.idx:
 	  --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' >> $@
 	#  > $@
 
-%.allcoref: %.lisp
+%.coref-allsent: %.lisp
 	echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<coreference-output>" > $@
 	bsn="$(BSN)";   bsn=$${bsn%%~*}; \
 	bsfn="$(BSFN)"; bsfn=$${bsfn%%~*}; \
@@ -110,8 +120,8 @@ $(DIR_DATA)/kb.da:
 	echo ") )" >> $@
 	rm $@.allsent
 
-%.henry: %.drs %.corenlp
-	perl $(DIR_PROGRAMS)/Boxer2Herny.pl --coref $(BSN).corenlp --input $(BSN).drs --output $@ #--nedis $(BSN).aida 
+%.henry: %.drs #%.corenlp
+	perl $(DIR_PROGRAMS)/Boxer2Herny.pl --input $(BSN).drs --output $@ # --coref $(BSN).corenlp #--nedis $(BSN).aida 
 
 %.aida:
 	java -jar program/AIDAinterface.jar input:$(BSN).txt output:$@
