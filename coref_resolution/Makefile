@@ -44,9 +44,11 @@ EVAL_MEASURE         = muc
 	cd $(DIR_CONLL_SCORER); \
 	perl scorer.pl $(EVAL_MEASURE) $$pwd/$(BSN).gold $$pwd/$(BSN).allconll;
 
-%.gold:
+%.gold: %.allcoref
 	file="$(BSFN)"; file=$${file%%-*}; \
-	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@
+	if grep -q coreference-result $(BSN).allcoref; then; \
+	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@; \
+	fi
 
 %.conll: %.coref conll.idx
 	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).coref --conll-index conll.idx --goldmention > $@
@@ -87,8 +89,8 @@ conll.idx:
 	python $(DIR_PROGRAMS)/mycoref.py\
 	  --input $$bsn.lisp --henry $$bsn.henry --drs $$bsn.drs --reasoner $(DIR_REASONER)/bin/henry \
 	  --target $$bsfn --sentence 0 $(OPTIONS) --datadir $(DIR_DATA) --extmod $(DIR_PROGRAMS)/henryext.py \
-	  --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' >> $@
-	#  >> $@
+	  >> $@
+	#  --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' >> $@
 	echo "</coreference-output>" >> $@
 
 %.coref: %.lisp %.drs %.txt $(DIR_DATA)/kb.da

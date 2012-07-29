@@ -38,7 +38,7 @@ def main():
 				buf			 = ln if "%s-%s" % (doc.split("/")[-1], prt) == pa.textid else None
 				
 			elif None != buf:
-				if "end document" in ln: buf += ln; conll2raw( buf, pa ); buf = ""
+				if "end document" in ln: buf += ln; conll2raw( buf, pa ); buf = ""; print ln.strip()
 				else:                    buf += ln
 	
 	

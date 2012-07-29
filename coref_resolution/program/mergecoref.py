@@ -67,6 +67,7 @@ def main():
 		sent_id				= 1
 		phase					= 0
 		cnt						= {}
+		ref_cnt				= defaultdict(int)
 		current_stack = []
 		
 		for ln in open( mapper[ text_id ] ):
@@ -83,14 +84,21 @@ def main():
 			ln[-1] = ""
 			
 			for n in lnins:
-				cnt[n] = 10000 + phase
+				if not cnt.has_key(n):
+					cnt[n] = 10000 + phase
+				ref_cnt[n] += 1
 				phase += 1
 				if "" != ln[-1]: ln[-1] += "|"
 				ln[-1] += "(%s" % system_response.get( n, cnt[n] )
 			
 			for n in lndel:
-				if "" != ln[-1] and "(%s" % system_response.get( n, cnt[n] ) not in ln[-1]: ln[-1] += "|"
-				ln[-1] += "%s)" % system_response.get( n, cnt[n] ) if "(%s" % system_response.get( n, cnt[n] ) not in ln[-1] else ")"
+				f_already_annotated = repr(system_response.get( n, cnt[n] )) in ln[-1].split( "(" )
+				if "" != ln[-1] and not f_already_annotated: ln[-1] += "|"
+				ln[-1] += "%s)" % system_response.get( n, cnt[n] ) if not f_already_annotated else ")"
+
+				ref_cnt[n] -= 1
+
+				if 0 == ref_cnt[n]: del cnt[n]
 
 			if "" == ln[-1]: ln[-1] = "-"
 			
