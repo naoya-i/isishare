@@ -39,9 +39,9 @@ def main():
 
 
 		for problem in sorted( train, key=lambda x: int(x) ):
-			print "(O (name %s%s) (label (structure (^" % (train[problem]["obs"][0], problem)
+			print "(O (name %s%s) (label (^" % (train[problem]["obs"][0], problem)
 			print "%s" % (train[problem]["gold"][1])
-			print "     ) ) ) (^ "
+			print "     ) ) (^ "
 			print train[problem]["obs"][1]
 			print "     ) )"
 			print

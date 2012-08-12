@@ -12,12 +12,13 @@ def mycoref( target, pa ):
 	ninput = open( pa.input[0] ).read()
 	
 	# Load mapping b/w entity variables and word id.
-	map_var_wordid = defaultdict( list)
-	mapper				 = lambda m: re.findall( "([^) ]+-%s')\(([^)]+)\):[^:]+:[^:]+:\[([^]]+)\]" % m, henry )
-	
-	for predicate, variables, wordids in mapper( "nn" ) + mapper( "vb" ):
+	map_var_wordid = defaultdict(list)
+	mapper				 = lambda m: re.findall( "(%s)'\(([^)]+)\):[^:]+:[^:]+:\[([0-9ID,-]+)\]" % m, henry )
+
+	for predicate, variables, wordids in mapper("[^)]+"): #mapper( "[^) ]+-nn" ) + mapper( "[^) ]+-vb" ) + mapper("male|neuter|female|thing"):
 		for wordid in wordids.split(","):
-			map_var_wordid[variables.split(",")[0] if "vb'" in predicate else variables.split(",")[1] ] += [wordid]
+			wordid_conv = wordid if "ID" not in wordid else repr(int(wordid.split("-ID")[0])*1000+int(wordid.split("-ID")[1]))
+			map_var_wordid[variables.split(",")[0] if "-vb" in predicate else variables.split(",")[1] ] += [wordid_conv]
 
 	# List the sentences.
 	xml_root	 = etree.Element( "coreference-result", attrib={"text": target, "sentence": pa.sentence[0]} )
@@ -28,13 +29,23 @@ def mycoref( target, pa ):
 		if None == re.search( "\(name %s\)" % pa.sentence[0], ninput, flags=re.MULTILINE ):
 			print >>sys.stderr, "No sentence found:", pa.sentence[0]
 		else:
-			ret             = os.popen( "%s -m infer %s -d 0 -T 10 -p %s -t 8 -b %s/kb.da -i %s -e %s -f '%s'" % ( pa.reasoner, pa.input[0], pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd ) ).read()
-			xml_ret					= etree.fromstring( ret )
-			hypothesis			= xml_ret.xpath( "/henry-output/result-inference/hypothesis" )[0].text
+			ret             = os.popen( "%s -m infer %s data/score-function.lisp %s -d %d -T 10 -p %s -t 8 -b %s/wn+fn.da -i %s -e %s -f '%s' %s" % (
+					pa.reasoner, pa.weight, pa.input[0], pa.depth,
+					pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd,
+					pa.anythingelse ) ).read()
+			xml_ret					= etree.fromstring( ret.replace( "&", "&amp;" ) )
+			hypo            = xml_ret.xpath( "/henry-output/result-inference/hypothesis" )
+
+			if 0 == len(hypo): print >>sys.stderr, "No hypothesis..."; return facts
+			
+			hypothesis			= hypo[0].text
 
 			if None == hypothesis:
 				print >>sys.stderr, "?", ret
 				return []
+
+			# Coreference-chains identified by unification.
+			in_chain = []
 			
 			for lit in hypothesis.split( " ^ " ):
 				if "=(" in lit:
@@ -44,8 +55,21 @@ def mycoref( target, pa ):
 					xml_chain_vars.text    = re.findall( "=\((.*?)\)", lit )[0]
 					xml_chain_wordids.text = ",".join( [ ",".join(map_var_wordid.get(x, "?")) for x in re.findall( "=\((.*?)\)", lit )[0].split(",") ] )
 
+					in_chain += xml_chain_vars.text.split(",")
 					chain_id += 1
 
+			for lit in hypothesis.split( " ^ " ):
+				for term in re.findall( "\((.*?)\)", lit )[0].split(","):
+					if not term.startswith("_") and term not in in_chain:
+						xml_chain							 = etree.Element( "chain", attrib={"id": str(chain_id)} ); 	  xml_root.append( xml_chain )
+						xml_chain_vars				 = etree.Element( "variables" ); xml_chain.append( xml_chain_vars )
+						xml_chain_wordids			 = etree.Element( "wordids" );   xml_chain.append( xml_chain_wordids )
+						xml_chain_vars.text    = term
+						xml_chain_wordids.text = ",".join(map_var_wordid.get(term, "?"))
+
+						in_chain += [term]
+						chain_id += 1
+					
 			xml_root.append( xml_ret.xpath( "/henry-output" )[0] )
 
 			print etree.tostring( xml_root, pretty_print=True )
@@ -61,6 +85,9 @@ def main():
 	parser = argparse.ArgumentParser( description="Abductive coreference resolution system." )
 	parser.add_argument( "--input", help="Input in Henry format.", nargs=1 )
 	parser.add_argument( "--henry", help="File mapping between word ids and henry literals.", nargs=1 )
+	parser.add_argument( "--weight", help="Weight file." )
+	parser.add_argument( "--depth", help="Depth.", default=0, type=int )
+	parser.add_argument( "--anythingelse", help="Commands passed to Henry.", default="" )
 	parser.add_argument( "--drs", help="File mapping between word ids and henry literals.", type=file )
 	parser.add_argument( "--target", help="Problem to be resolved (e.g. wsj_0020-000).", nargs="+" )
 	parser.add_argument( "--sentence", help="Sentence to be resolved (e.g. 1).", nargs=1 )

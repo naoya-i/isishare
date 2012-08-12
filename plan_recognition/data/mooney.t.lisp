@@ -1,4 +1,4 @@
-(O (name t1) (label (structure (^
+(O (name t1) (label (^
       (inst_shopping ?s :10)
       (find_step ?s FIND1 :10)
       (buy_step ?s ?b :10)
@@ -19,7 +19,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_finding FIND1 :10)
       (finder FIND1 JOHN1 :10)
       (name JOHN1 JOHN :10)
@@ -31,7 +31,7 @@
       (thing_paid PAY1 BREAD1 :10)
      ) )
 
-(O (name t2) (label (structure (^
+(O (name t2) (label (^
       (inst_robbing ?r :10)
       (inst_going_by_bus ?b :10)
       (get_weapon_step ?r GET2 :10)
@@ -55,7 +55,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_getting GET2 :10)
       (agent_get GET2 BOB2 :10)
       (name BOB2 BOB :10)
@@ -70,7 +70,7 @@
       (inst_liquor_store LS2 :10)
      ) )
 
-(O (name t3) (label (structure (^
+(O (name t3) (label (^
       (inst_robbing ?r :10)
       (go_step ?r GO3 :10)
       (point_weapon_step ?r POINT3 :10)
@@ -94,7 +94,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_going GO3 :10)
       (goer GO3 BOB3 :10)
       (name BOB3 BOB :10)
@@ -109,7 +109,7 @@
       (own O3 SM3 :10)
      ) )
 
-(O (name t4) (label (structure (^
+(O (name t4) (label (^
       (inst_going_by_plane ?p :10)
       (inst_going_by_bus ?b :10)
       (pack_step ?p PACK4 :10)
@@ -132,7 +132,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_packing PACK4 :10)
       (agent_pack PACK4 BILL4 :10)
       (name BILL4 BILL :10)
@@ -147,7 +147,7 @@
       (inst_airport AIRPORT4 :10)
      ) )
 
-(O (name t5) (label (structure (^
+(O (name t5) (label (^
       (inst_smarket_shopping ?s :10)
       (inst_going_by_bus ?b :10)
       (go_step ?s ?b :10)
@@ -174,7 +174,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_giving GIVE5 :10)
       (giver GIVE5 JACK5 :10)
       (name JACK5 JACK :10)
@@ -194,7 +194,7 @@
       (inst_milk MILK5 :10)
      ) )
 
-(O (name t6) (label (structure (^
+(O (name t6) (label (^
       (inst_rest_dining ?d :10)
       (inst_going_by_bus ?b :10)
       (go_step ?d ?b :10)
@@ -220,7 +220,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_giving GIVE6 :10)
       (giver GIVE6 JACK6 :10)
       (name JACK6 JACK :10)
@@ -240,7 +240,7 @@
       (inst_milk MILK6 :10)
      ) )
 
-(O (name t7) (label (structure (^
+(O (name t7) (label (^
       (inst_robbing ?r :10)
       (get_weapon_step ?r GET7 :10)
       (get_valuable_step ?r GET7B :10)
@@ -265,7 +265,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_getting GET7 :10)
       (agent_get GET7 FRED7 :10)
       (name FRED7 FRED :10)
@@ -281,7 +281,7 @@
       (inst_smarket SM7 :10)
      ) )
 
-(O (name t8) (label (structure (^
+(O (name t8) (label (^
       (inst_robbing ?r :10)
       (get_weapon_step ?r GET8 :10)
       (go_step ?r GO8 :10)
@@ -308,7 +308,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_getting GET8 :10)
       (agent_get GET8 FRED8 :10)
       (name FRED8 FRED :10)
@@ -326,7 +326,7 @@
       (inst_suitcase SC8 :10)
      ) )
 
-(O (name t9) (label (structure (^
+(O (name t9) (label (^
       (inst_rest_dining ?d :10)
       (go_step ?d GO9 :10)
       (drink_step ?d ?dk :10)
@@ -349,7 +349,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_going GO9 :10)
       (goer GO9 TOM9 :10)
       (name TOM9 TOM :10)
@@ -364,7 +364,7 @@
       (inst_milkshake MS9 :10)
      ) )
 
-(O (name t10) (label (structure (^
+(O (name t10) (label (^
       (inst_liqst_shopping ?s :10)
       (inst_going_by_taxi GO10 :10)
       (go_step ?s GO10 :10)
@@ -388,7 +388,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_going GO10 :10)
       (goer GO10 BOB10 :10)
       (name BOB10 BOB :10)
@@ -405,7 +405,7 @@
       (inst_shelf SHF10 :10)
      ) )
 
-(O (name t11) (label (structure (^
+(O (name t11) (label (^
       (inst_going_by_plane ?p :10)
       (inst_going_by_taxi GO11 :10)
       (inst_robbing ?r :10)
@@ -430,7 +430,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_going GO11 :10)
       (goer GO11 JANE11 :10)
       (name JANE11 JANE :10)
@@ -447,7 +447,7 @@
       (occupation TD11 TAXIDRIVER :10)
      ) )
 
-(O (name t12) (label (structure (^
+(O (name t12) (label (^
       (inst_robbing ?r :10)
       (inst_going_by_taxi GO12 :10)
       (get_weapon_step ?r GET12 :10)
@@ -470,7 +470,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_getting GET12 :10)
       (agent_get GET12 JOHN12 :10)
       (name JOHN12 JOHN :10)
@@ -485,7 +485,7 @@
       (inst_airport AIRPORT12 :10)
      ) )
 
-(O (name t13) (label (structure (^
+(O (name t13) (label (^
       (inst_robbing ?r :10)
       (get_weapon_step ?r GET13 :10)
       (go_step ?r GO13 :10)
@@ -507,7 +507,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_getting GET13 :10)
       (agent_get GET13 ALICE13 :10)
       (name ALICE13 ALICE :10)
@@ -520,7 +520,7 @@
       (inst_bus_station BUS_STATION13 :10)
      ) )
 
-(O (name t14) (label (structure (^
+(O (name t14) (label (^
       (inst_going_by_plane ?p :10)
       (inst_going_by_taxi ?t :10)
       (go_step ?p ?t :10)
@@ -541,7 +541,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_paying PAY14 :10)
       (payer PAY14 JOHN14 :10)
       (name JOHN14 JOHN :10)
@@ -554,7 +554,7 @@
       (inst_plane PLANE14 :10)
      ) )
 
-(O (name t15) (label (structure (^
+(O (name t15) (label (^
       (inst_going_by_plane ?t :10)
       (inst_going_by_taxi GO15 :10)
       (go_step ?t GO15 :10)
@@ -572,7 +572,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_going GO15 :10)
       (goer GO15 JOHN15 :10)
       (name JOHN15 JOHN :10)
@@ -582,7 +582,7 @@
       (inst_airport AIRPORT15 :10)
      ) )
 
-(O (name t16) (label (structure (^
+(O (name t16) (label (^
       (inst_smarket_shopping ?s :10)
       (inst_going_by_bus ?b :10)
       (go_step ?s ?b :10)
@@ -601,7 +601,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_getting_off GETOFF16 :10)
       (agent_get_off GETOFF16 FRED16 :10)
       (name FRED16 FRED :10)
@@ -611,7 +611,7 @@
       (inst_smarket SM16 :10)
      ) )
 
-(O (name t17) (label (structure (^
+(O (name t17) (label (^
       (inst_going_by_plane ?p :10)
       (inst_going_by_taxi ?t :10)
       (pack_step ?p PACK17 :10)
@@ -633,7 +633,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_packing PACK17 :10)
       (agent_pack PACK17 JOHN17 :10)
       (name JOHN17 JOHN :10)
@@ -646,7 +646,7 @@
       (occupation TD17 TAXIDRIVER :10)
      ) )
 
-(O (name t18) (label (structure (^
+(O (name t18) (label (^
       (inst_rest_dining ?d :10)
       (inst_going_by_taxi ?t :10)
       (go_step ?d ?t :10)
@@ -668,7 +668,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_paying PAY18 :10)
       (payer PAY18 MARY18 :10)
       (name MARY18 MARY :10)
@@ -681,7 +681,7 @@
       (inst_milkshake MS18 :10)
      ) )
 
-(O (name t19) (label (structure (^
+(O (name t19) (label (^
       (inst_robbing ?r :10)
       (inst_smarket_shopping ?s :10)
       (get_weapon_step ?r GET19 :10)
@@ -717,7 +717,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_getting GET19 :10)
       (agent_get GET19 MARY19 :10)
       (name MARY19 MARY :10)
@@ -744,7 +744,7 @@
       (occupation CSH19 CASHIER :10)
      ) )
 
-(O (name t20) (label (structure (^
+(O (name t20) (label (^
       (inst_liqst_shopping ?s :10)
       (inst_going_by_taxi GO20 :10)
       (go_step ?s GO20 :10)
@@ -767,7 +767,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_going GO20 :10)
       (goer GO20 BILL20 :10)
       (name BILL20 BILL :10)
@@ -782,7 +782,7 @@
       (inst_bourbon BOURBON20 :10)
      ) )
 
-(O (name t21) (label (structure (^
+(O (name t21) (label (^
       (inst_paying PAY21 :10)
       (payer PAY21 BILL21 :10)
       (name BILL21 BILL :10)
@@ -799,7 +799,7 @@
       (! (inst_going_by_taxi *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_paying PAY21 :10)
       (payer PAY21 BILL21 :10)
       (name BILL21 BILL :10)
@@ -807,7 +807,7 @@
       (inst_bourbon BOURBON21 :10)
      ) )
 
-(O (name t22) (label (structure (^
+(O (name t22) (label (^
       (inst_paying PAY22 :10)
       (payer PAY22 BILL22 :10)
       (name BILL22 BILL :10)
@@ -824,7 +824,7 @@
       (! (inst_going_by_taxi *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_paying PAY22 :10)
       (payer PAY22 BILL22 :10)
       (name BILL22 BILL :10)
@@ -832,7 +832,7 @@
       (inst_milk MILK22 :10)
      ) )
 
-(O (name t23) (label (structure (^
+(O (name t23) (label (^
       (inst_going_by_plane ?p :10)
       (buy_ticket_step ?p BUY23 :10)
       (get_on_step ?p GETON23 :10)
@@ -860,7 +860,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_buying BUY23 :10)
       (buyer BUY23 JOHN23 :10)
       (name JOHN23 JOHN :10)
@@ -883,7 +883,7 @@
       (inst_plane PLANE23 :10)
      ) )
 
-(O (name t24) (label (structure (^
+(O (name t24) (label (^
       (inst_rest_dining ?d :10)
       (inst_going_by_bus ?b :10)
       (go_step ?d ?b :10)
@@ -908,7 +908,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_going GO24 :10)
       (goer GO24 MARY24 :10)
       (name MARY24 MARY :10)
@@ -926,7 +926,7 @@
       (inst_milk MILK24 :10)
      ) )
 
-(O (name t25) (label (structure (^
+(O (name t25) (label (^
       (inst_going_by_plane ?p :10)
       (pack_step ?p PACK25 :10)
       (get_off_step ?p GETOFF25 :10)
@@ -946,7 +946,7 @@
       (! (inst_paying *))
       (! (inst_jogging *))
       (! (inst_partying *))
-     ) ) ) (^ 
+     ) ) (^ 
       (inst_packing PACK25 :10)
       (agent_pack PACK25 JANE25 :10)
       (name JANE25 JANE :10)

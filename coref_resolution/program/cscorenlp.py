@@ -46,6 +46,8 @@ def sendText( text, host="localhost", port=9001 ):
 	finally:
 		sock.close()
 
+		if not is_data_recv: return None
+		
 		# Convert to XML.
 		xml_root		 = etree.Element( "root" )
 		xml_doc			 = etree.Element( "document" ); xml_root.append( xml_doc )

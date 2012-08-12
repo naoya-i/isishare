@@ -54,27 +54,14 @@ for fn in sys.argv[1:]:
 
 		if "=>" in ln:
 			lit = lit.split( " => " )
-			if 2 != len(lit): continue
+			if 2 != len(lit): print >>sys.stderr, "?:", lit; continue
 
-			if 1 == len(lit[1].split( " & " )):
-				weights = re.findall( ":([0-9.]+)", lit[0] )
+			weights = re.findall( ":([0-9.]+)", lit[0] )
 				
-				print "(B (name %s) (=> (^ %s) %s) )" % (obs,
-																								 " ".join( [se2(x) for x in lit[0].split( " & " )]),
-																								 " ".join( [se2(x) for x in lit[1].split( " & " )]),
-																								 )
-			elif 1 < len(lit[1].split( " & " )):
-				def w0(a): return "%s:0.0001" % a
-				#[w0(y) for y in lit[1].split( " & " )[1:]]
-
-				#print \
-				if not hosh.has_key( se2(lit[1].split( " & " )[0]) ):
-					hosh[ se2(lit[1].split( " & " )[0]) ] = \
-				"(B (name %s) (=> (^ %s) %s) )" % (obs,
+			print "(B (name %s) (=> (^ %s) (^ %s) ) )" % (obs,
 																					 " ".join( [se2(x) for x in lit[0].split( " & " )]),
-																					 se2(lit[1].split( " & " )[0])
-																					 )
-				
+																					 " ".join( [se2(x) for x in lit[1].split( " & " )]) )
+			
 		else:
 			print "(O (name %s) (^ %s) )" % (obs, " ".join( [se(x) for x in lit.split( " & " )]))
 	

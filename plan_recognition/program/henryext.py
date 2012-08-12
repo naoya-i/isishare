@@ -12,9 +12,19 @@ from collections import defaultdict
 def _myfile( x ):
 	return os.path.join( g_mydir, x )
 
-g_disj = dict( [(x.strip(), None) for x in open( "/home/naoya-i/work/unkconf2012/plan-disj.tsv" ).readlines() ] )
-g_mydir		 = os.path.abspath(os.path.dirname(__file__))
+g_disj	= dict( [(x.strip(), None) for x in open( "/home/naoya-i/work/unkconf2012/plan-disj.tsv" ) ] )
+g_mydir	= os.path.abspath(os.path.dirname(__file__))
 
+
+def cbSfDisj( args ):
+	p1, p2, coref = args
+
+	if int(p1[0]) >= int(p2[0]): return []
+
+	if g_disj.has_key( "%s/1\t%s/1" % (p1[1], p2[1]) ) or g_disj.has_key( "%s/1\t%s/1" % (p2[1], p1[1]) ):
+		return [("DISJOINT", -9999)]
+	
+	return []
 
 
 def _getArgPos( p, t ):
@@ -92,6 +102,7 @@ def cbGetLoss( system, gold ):
 	slots, alignments = {}, []
 	_findGoldMatch( alignments, slots, gold_pos, lfs, {} )
 
+	print "AL:", len(alignments), num_neg_loss
 	if 0 < len( alignments ) and 0 == num_neg_loss: return 0
 
 	return 10
@@ -219,7 +230,7 @@ def _shrink( lfs ):
 
 		for v in eq[1]: signature[v] = rep
 	
-	return list( set([_applySignature( lf, signature ) for lf in lfs if not lf.startswith("=")]) )
+	return list( set([_applySignature( lf, signature ) for lf in lfs if not lf.startswith("=") and  not lf.startswith("!=")]) )
 
 #
 def _findGoldMatch( out_alignments, out_slots, gold, lfs, bind_history, depth = 1 ):
