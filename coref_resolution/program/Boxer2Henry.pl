@@ -5,6 +5,7 @@ use Getopt::Long;
 my %conditional = ();
 my %regex_conditional = ();
 my %nonmerge = ();
+my %merge = ();
 my %id2props = ();
 my %args2props = ();
 my %count_words_before = ();
@@ -48,24 +49,13 @@ open(OUT,">$ofile") or die "Cannot open $ofile\n";
 &add_nedis();
 
 ## IF COREF OR NE INFO WAS ADDED THEN PRINT OUT (OTHEWISE IT HAS BEEN ALREADY PRINTED OUT)
-if(($sfile ne "")||($nefile ne "")){&add_nm_and_printAll();}
+if(($sfile ne "")||($nefile ne "")){
+	&printHenryFormat_bash();
+}
 
+if($warnings==1){print "Henry file printed.\n";}
 close OUT;
 
-###########################################################################
-# ADD NON MERGE AND PRINT ALL
-###########################################################################
-
-sub add_nm_and_printAll(){
-    ## ADD NONMERGE CONSTRAINTS AND PRINT OUT HENRY FORMAT SENCENCE BY SENTENCE
-    for my $sid (sort (keys %id2props)){
-	    #print "Processing sentence $sid...\n";
-	    &add_nonmerge($sid);
-	    &printHenryFormat($sid);
-	    %nonmerge = ();
-    }
-    print "Henry file printed.\n";
-}
 
 ###########################################################################
 # SET PARAMETERS
@@ -102,7 +92,7 @@ sub setNMParameter(){
 ###########################################################################
 
 sub printUsage(){
-    print "Usage: perl Boxer2Henry.pl\n --input <boxer file>\n --output <henry file>\n --cost <real number> (default=1)\n [--conditional <conditional unification file>]\n [--coref <standford coref file>]\n [--nedis <disambiguated named entities file>]\n [--split <split nouns concatenated by Boxer> (possible values: [0=no, 1=yes], default: 0)]\n [--non-merge <nonmerge options> (possible values:modality,samepred,sameargs) 'modality' -- consider modality to create non-merge, 'samepred' -- non-merge for props with the same name, 'sameargs' -- non-merge for args of the same prop] \n";
+    print "Usage: perl Boxer2Henry.pl\n --input <boxer file>\n --output <henry file>\n --cost <real number> (default=1)\n [--conditional <conditional unification file>]\n [--coref <standford coref file>]\n [--nedis <disambiguated named entities file>]\n [--split <split nouns concatenated by Boxer> (possible values: [0=no, 1=yes], default: 0)]\n [--nonmerge <nonmerge options> (possible values:modality,samepred,sameargs) 'modality' -- consider modality to create non-merge, 'samepred' -- non-merge for props with the same name, 'sameargs' -- non-merge for args of the same prop] \n";
     exit(0);
 }
 
@@ -136,12 +126,15 @@ sub add_nedis(){
                                  my @args =  @{$id2props{$sid}{$boxer_tid}{$pname}{'args'}};
                                  if((scalar @args)==2){
                                       # REPLACE ARGS WITH A NEW CONSTANT
-                                      if(!(exists $been{$args[1]})){
-                                        $been{$args[1]} = 1;
-
-                                        &replace_args($args[0],"E".$constant_counter,"");
-                                        &replace_args($args[1],"NE".$constant_counter,"");
-                                      }
+                                      #if(!(exists $been{$args[1]})){
+                                      #  $been{$args[1]} = 1;
+                                      #
+                                      #  &replace_args($args[0],"E".$constant_counter,"");
+                                      #  &replace_args($args[1],"NE".$constant_counter,"");
+                                      #}
+                                      #ADD NEW EQUALITY
+                                      $merge{$constant_counter}{"(= ".$args[0]." "."E".$constant_counter.")"}=1;
+                                      $merge{$constant_counter}{"(= ".$args[1]." "."NE".$constant_counter.")"}=1
 	                         }
                         }
                         delete($id2props{$sid}{$boxer_tid});
@@ -226,7 +219,6 @@ sub add_coref(){
     foreach my $key (keys %coref_info){
         $constant_counter++;
         my %been = ();
-
         foreach my $sid (keys %{$coref_info{$key}}){
              foreach my $tid (keys %{$coref_info{$key}{$sid}}){
                   my $boxer_tid = $sid * 1000 + $tid;
@@ -248,25 +240,14 @@ sub add_coref(){
                                         }
 	                        }
 
-                                # REPLACE ARGS WITH A NEW CONSTANT
-	                        if(($arg ne "")&&($arg ne "C".$constant_counter)){
-                                   if(!(exists $been{$arg})){
-                                        $been{$arg} = 1;
-                                        if($arg =~ /C\d+/){
-                                        	&replace_args($arg,"C".$constant_counter,"");
-                                        }
-                                        else{&replace_args($arg,"C".$constant_counter,$sid);}
-                                   }
-                                }
+                                $merge{$constant_counter}{$arg}=1;
                         }
                   }
              }
-             #if($key eq "2"){print OUT Dumper($id2props{"3"}); exit(0);}
         }
     }
 
-    #print OUT Dumper(%id2props); exit(0);
-    print "Coreference information added.\n";
+    if($warnings==1){print "Coreference information added.\n";}
 }
 
 ###########################################################################
@@ -339,7 +320,7 @@ sub read_coref_file(){
     close FILE;
     %id2word = ();
 
-    print "Coference file read.\n";
+    if($warnings==1){print "Coference file read.\n"; }
 }
 
 
@@ -376,17 +357,12 @@ sub add_nonmerge(){
 
               ## ARGUMENTS OF THE SAME PREDICATE CANNOT BE MERGED
               if($sameargs == 1){
-              		foreach(my $i=0;$i<(scalar @args);$i++){
-	                      my $arg1 = $args[$i];
-	                      foreach(my $j=$i+1;$j<(scalar @args);$j++){
-	                         my $arg2 = $args[$j];
-	                         if($arg1 ne $arg2){
-	                                if(!(exists $nonmerge{$arg2."!=".$arg1})){
-	                                        $nonmerge{$arg1."!=".$arg2} = 1;
-	                                }
-	                         }
-	                      }
-	               }
+                        my $str = "(!=";
+                        foreach(my $i=0;$i<(scalar @args);$i++){
+                             $str = $str." ".$args[$i];
+
+	                }
+                        $nonmerge{$str.")"} = 1;
                }
                ############################################
 
@@ -404,8 +380,8 @@ sub add_nonmerge(){
                                 my $a1 = $args[0];
 	                        my $a2 = $id2props{$sent_id}{$pid2}{$pname2}{'args'}[0];
 	                        if($a1 ne $a2){
-	                                if(!(exists $nonmerge{$a2."!=".$a1})){
-                                                $nonmerge{$a1."!=".$a2} = 1;
+	                                if(!(exists $nonmerge{"(!= ".$a2." ".$a1.")"})){
+                                                $nonmerge{"(!= ".$a1." ".$a2.")"} = 1;
 	                                }
 	                        }
 	                     }
@@ -414,8 +390,8 @@ sub add_nonmerge(){
                                  my $a1 = $args[0];
 	                         my $a2 = $id2props{$sent_id}{$pid2}{$pname2}{'args'}[0];
 	                         if($a1 ne $a2){
-	                         	if(!(exists $nonmerge{$a2."!=".$a1})){
-                                                $nonmerge{$a1."!=".$a2} = 1;
+	                         	if(!(exists $nonmerge{"(!= ".$a2." ".$a1.")"})){
+                                                $nonmerge{"(!= ".$a1." ".$a2.")"} = 1;
 	                                }
 	                         }
                              }
@@ -483,13 +459,47 @@ sub define_modality(){
    return "";
 }
 ###########################################################################
+# CREATE FINAL OUTPUT BASH
+###########################################################################
+
+sub printHenryFormat_bash(){
+
+   foreach my $sent_id(keys %id2props){
+        &add_nonmerge($sent_id);
+        printHenryFormat($sent_id,0);
+        %nonmerge = ();
+   }
+
+   print OUT "\n(O (name 0) (^";
+
+   foreach my $sent_id(keys %id2props){
+        &add_nonmerge($sent_id);
+        printHenryFormat($sent_id,1);
+        %nonmerge = ();
+   }
+
+   my $str = "";
+   foreach my $key (keys %merge){
+	   $str = $str . " (=";
+	   foreach my $arg (keys %{$merge{$key}}){
+                $str = $str . " ".$arg;
+	   }
+	   $str = $str . ")";
+   }
+
+   print OUT $str . "))\n";
+}
+
+###########################################################################
 # CREATE FINAL OUTPUT
 ###########################################################################
 
 sub printHenryFormat(){
-    my ($sent_id) = @_;
+    my ($sent_id,$bash) = @_;
 
-    my $str = $sent_id . "] ";
+    my $str = "";
+
+    if($bash==0) {$str = "(O (name $sent_id) (^";}
 
     my $id_counter = 1;
 
@@ -500,12 +510,12 @@ sub printHenryFormat(){
                        my @args = @{$id2props{$sent_id}{$pid}{$pname}{'args'}};
                        my $key = $pname.",".$args[0];
                        if(!(exists $out_str{$key})){
-                            my $pred_str = $pname . "(";
+                            my $pred_str = "(".$pname;
                             foreach my $arg (@args){
-	                        $pred_str = $pred_str . $arg . ",";
+	                        $pred_str = $pred_str ." ".$arg;
 	               	    }
-	               	    chop($pred_str);
-                            $pred_str = $pred_str . "):$cost:$sent_id-$id_counter";
+                            $id_counter++;
+                            $pred_str = " ".$pred_str . " :$cost:$sent_id-$id_counter";
 
                             $out_str{$key}{'pred'} = $pred_str;
                        }
@@ -515,22 +525,24 @@ sub printHenryFormat(){
 
 
     foreach my $key (keys %out_str){
-        $id_counter++;
         $str = $str . $out_str{$key}{'pred'} . ":[";
         foreach my $pid (@{$out_str{$key}{'pids'}}){
            $str = $str . $pid . ",";
         }
         chop($str);
-        $str = $str . "] & ";
+        $str = $str . "])";
     }
 
     foreach my $nm (keys %nonmerge){
-    	$str = $str . $nm . " & ";
+    	$str = $str . " " . $nm;
     }
 
-    chop($str);chop($str);chop($str);
-    print OUT $str . "\n";
 
+    if($bash==0) {
+	$str = $str  . "))\n";
+    }
+
+    print OUT $str;
     %out_str = ();
 }
 
@@ -604,12 +616,12 @@ sub read_Boxer_file(){
                 }
     	   }
 
-           if(($sfile eq "")&&($nefile eq "")){
+           if((($sfile eq "")&&($nefile eq ""))&&($sent_id ne "")){
                 if($warnings==1){
                 	print "Processing sentence $sent_id.\n";
                 }
 	    	&add_nonmerge($sent_id);
-	   	&printHenryFormat($sent_id);
+	   	&printHenryFormat($sent_id,0);
                 %id2props = ();
            }
 
@@ -779,11 +791,11 @@ sub read_Boxer_file(){
         	print "Processing sentence $sent_id.\n";
         }
 	&add_nonmerge($sent_id);
-	&printHenryFormat($sent_id);
+	&printHenryFormat($sent_id,0);
         %id2props = ();
     }
 
-    print "Boxer file read.\n";
+    if($warnings==1){print "Boxer file read.\n";}
 }
 ################################################################################
 # CHECK IF BOXER DID NOT RECOGNIZE SOME PREPOSITIONS AS SUCH
