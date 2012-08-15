@@ -23,6 +23,7 @@ my $samepred = 0;
 my $sameargs = 0;
 my $modality = 0;
 my $warnings = 0;
+my $wholefileoutput = 0;
 
 GetOptions ("input=s" => \$ifile,
 	    "output=s" => \$ofile,
@@ -32,7 +33,8 @@ GetOptions ("input=s" => \$ifile,
             "cost=s" => \$cost,
             "split=i" => \$split,
             "nonmerge=s" => \$nonmerge_opt,
-            "warnings=i" => \$warnings);
+            "warnings=i" => \$warnings,
+            "wholefileoutput=i" => \$wholefileoutput);
 
 &setParameters();
 
@@ -49,7 +51,7 @@ open(OUT,">$ofile") or die "Cannot open $ofile\n";
 &add_nedis();
 
 ## IF COREF OR NE INFO WAS ADDED THEN PRINT OUT (OTHEWISE IT HAS BEEN ALREADY PRINTED OUT)
-if(($sfile ne "")||($nefile ne "")){
+if((($sfile ne "")||($nefile ne ""))||($wholefileoutput==1)){
 	&printHenryFormat_bash();
 }
 
@@ -65,6 +67,8 @@ sub setParameters(){
    if(($ifile eq "")||($ofile eq "")) {print("Input or output file missing.\n"); &printUsage();}
 
    if(($split!=0)&&($split!=1)) {print("Wrong value of 'split' parameter: $split. Only '0' and '1' accepted.\n"); exit(0);}
+
+   if(($wholefileoutput!=0)&&($wholefileoutput!=1)) {print("Wrong value of 'wholefileoutput' parameter: $wholefileoutput Only '0' and '1' accepted.\n"); exit(0);}
 
    if(($warnings!=0)&&($warnings!=1)) {print("Wrong value of 'warnings' parameter: $warnings. Only '0' and '1' accepted.\n"); exit(0);}
 
@@ -541,6 +545,7 @@ sub printHenryFormat(){
     if($bash==0) {
 	$str = $str  . "))\n";
     }
+    else{$str = $str  . "\n";}
 
     print OUT $str;
     %out_str = ();
@@ -616,7 +621,7 @@ sub read_Boxer_file(){
                 }
     	   }
 
-           if((($sfile eq "")&&($nefile eq ""))&&($sent_id ne "")){
+           if(((($sfile eq "")&&($nefile eq ""))&&($sent_id ne ""))&&($wholefileoutput==0)){
                 if($warnings==1){
                 	print "Processing sentence $sent_id.\n";
                 }
@@ -786,7 +791,7 @@ sub read_Boxer_file(){
                 }
     }
 
-    if(($sfile eq "")&&($nefile eq "")){
+    if((($sfile eq "")&&($nefile eq ""))&&($wholefileoutput==0)){
         if($warnings==1){
         	print "Processing sentence $sent_id.\n";
         }
