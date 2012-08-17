@@ -8,7 +8,8 @@ my %nonmerge = ();
 my %merge = ();
 my %id2props = ();
 my %args2props = ();
-my %count_words_before = ();
+
+my %global_token_index = ();
 
 my $ifile = "";
 my $ofile = "";
@@ -19,7 +20,7 @@ my $nonmerge_opt = "";
 
 my $cost = "1";
 my $split = 0;
-my $samepred = 0;
+my $samepred = 1;
 my $sameargs = 0;
 my $modality = 0;
 my $warnings = 0;
@@ -52,7 +53,7 @@ open(OUT,">$ofile") or die "Cannot open $ofile\n";
 
 ## IF COREF OR NE INFO WAS ADDED THEN PRINT OUT (OTHEWISE IT HAS BEEN ALREADY PRINTED OUT)
 if((($sfile ne "")||($nefile ne ""))||($wholefileoutput==1)){
-	&printHenryFormat_bash();
+        &printHenryFormat_batch();
 }
 
 if($warnings==1){print "Henry file printed.\n";}
@@ -121,38 +122,39 @@ sub add_nedis(){
          my %been = ();
 
          foreach my $key (keys %{$nedis_info{$entity}}){
-              for (my $i=$nedis_info{$entity}{$key}{'start'}; $i<=$nedis_info{$entity}{$key}{'end'};$i++){
-                   my $sid = $nedis_info{$entity}{$key}{'sid'};
-                   my $boxer_tid = $sid * 1000 + $i;
+              my $start = $nedis_info{$entity}{$key}{'start'};
+              my $end = $nedis_info{$entity}{$key}{'end'};
+
+              my $sid = $nedis_info{$entity}{$key}{'sid'};
+              for (my $i=$start; $i<=$end;$i++){
+                   my $boxer_tid = $global_token_index{$i}{'tid'};
 
                    if(exists $id2props{$sid}{$boxer_tid}){
                         for my $pname (keys %{$id2props{$sid}{$boxer_tid}}){
-                                 my @args =  @{$id2props{$sid}{$boxer_tid}{$pname}{'args'}};
+                            for my $farg (keys %{$id2props{$sid}{$boxer_tid}{$pname}{'args'}}){
+                                 my @args =  @{$id2props{$sid}{$boxer_tid}{$pname}{'args'}{$farg}};
                                  if((scalar @args)==2){
-                                      # REPLACE ARGS WITH A NEW CONSTANT
-                                      #if(!(exists $been{$args[1]})){
-                                      #  $been{$args[1]} = 1;
-                                      #
-                                      #  &replace_args($args[0],"E".$constant_counter,"");
-                                      #  &replace_args($args[1],"NE".$constant_counter,"");
-                                      #}
                                       #ADD NEW EQUALITY
-                                      $merge{$constant_counter}{"(= ".$args[0]." "."E".$constant_counter.")"}=1;
-                                      $merge{$constant_counter}{"(= ".$args[1]." "."NE".$constant_counter.")"}=1
+                                      #$merge{$constant_counter."E"}{$args[0]}=1;
+                                      #$merge{$constant_counter."E"}{"nee".$constant_counter}=1;
+
+                                      $merge{$entity}{$args[1]}=1;
+                                      #REPLACE OLD PREPS WITH AIDA ENTITY
+                                      #$merge{$entity}{"ne".$constant_counter}=1;
 	                         }
+                            }
                         }
-                        delete($id2props{$sid}{$boxer_tid});
-                        foreach my $a (keys %{$args2props{$sid}}){
-                            delete($args2props{$sid}{$a}{$boxer_tid});
-                        }
+                        #REPLACE OLD PREPS WITH AIDA ENTITY
+                        #delete($id2props{$sid}{$boxer_tid});
                    }
-                   $id2props{$sid}{$boxer_tid}{$new_predname}{'args'} = ["E".$constant_counter,"NE".$constant_counter];
-                   $args2props{$sid}{"E".$constant_counter}{$boxer_tid}{$new_predname}{'0'} = 1;
-                   $args2props{$sid}{"NE".$constant_counter}{$boxer_tid}{$new_predname}{'1'} = 1;
+                   #REPLACE OLD PREPS WITH AIDA ENTITY
+                   #$id2props{$sid}{$boxer_tid}{$new_predname}{'args'}{"nee".$constant_counter} = ["nee".$constant_counter,"ne".$constant_counter];
               }
          }
+         if((scalar(keys %{$merge{$entity}}))<2){delete $merge{$entity};}
     }
 
+    #print OUT Dumper(%merge); exit(0);
 }
 
 ###########################################################################
@@ -165,11 +167,12 @@ sub read_nedis_file(){
     my $nedis_counter = 0;
 
     while(my $line=<FILE>){
-         if($line =~ /([^\s]+):(\d+)-(\d+) -> ([^\s\n]+)/){
-         	my $sid = $1;
-                my $start_id = $2;
-                my $end_id = $3;
-                my $entity = $4;
+         if($line =~ /^(.+) ([^\s]+):(\d+)-(\d+) -> ([^\s\n]+)/){
+                my $mention = $1;
+                my $sid = $2;
+                my $start_id = $3;
+                my $end_id = $4;
+                my $entity = $5;
 
                 #REPLACE UNICORE
                 #002d -
@@ -188,9 +191,54 @@ sub read_nedis_file(){
 
                 if($entity ne "--NME--"){
                 	$nedis_counter++;
-                	$nedis_info{$entity}{$nedis_counter}{'sid'} = $sid;
-                	$nedis_info{$entity}{$nedis_counter}{'start'} = $start_id - $count_words_before{$sid};
-                	$nedis_info{$entity}{$nedis_counter}{'end'} = $end_id - $count_words_before{$sid};
+                        #$nedis_info{$entity}{$nedis_counter}{'mention'} = $mention;
+                        #$nedis_info{$entity}{$nedis_counter}{'sid'} = $sid;
+
+                        #MATCH AIDA TOKENIZAZION WITH BOXER TOKENIZATION
+                        my @tokens = split(/ /,$mention);
+                        my $first_token = $tokens[0];
+                        my $found=0;
+                        my $real_start=-1;
+                        my $real_end=-1;
+
+                        my $iteration=0;
+                        my $i=$start_id;
+                        while($iteration < 50){
+                            if($first_token eq $global_token_index{$i}{'word'}){
+                            	$found=1;
+                                $real_start=$i;
+                                $real_end=$end_id-$iteration;
+                                last;
+                            }
+                            else{
+                            	$i--;
+                                if(!(exists $global_token_index{$i})){last;}
+                            }
+                            $iteration++;
+                        }
+
+                        if($found==0){
+                        	my $iteration=0;
+	                        my $i=$start_id;
+	                        while($iteration < 50){
+                                    if($first_token eq $global_token_index{$i}{'word'}){
+	                                $found=1;
+	                                $real_start=$i;
+                                        $real_end=$end_id+$iteration;
+                                        last;
+	                            }
+	                            else{
+	                                $i++;
+                                        if(!(exists $global_token_index{$i})){last;}
+	                            }
+                                    $iteration++;
+	                        }
+                        }
+                        if($found==1){
+                                $nedis_info{$entity}{$nedis_counter}{'start'} = $real_start;
+                                $nedis_info{$entity}{$nedis_counter}{'end'} = $real_end;
+                                $nedis_info{$entity}{$nedis_counter}{'sid'} = $global_token_index{$real_start}{'sid'};
+                        }
                 }
          }
          else{
@@ -202,6 +250,8 @@ sub read_nedis_file(){
 
     close FILE;
 
+    #print Dumper(%nedis_info);
+    #exit(0);
 }
 
 ###########################################################################
@@ -218,8 +268,6 @@ sub add_coref(){
 
     my $constant_counter = 0;
 
-    #print OUT Dumper(%coref_info);  exit(0);
-
     foreach my $key (keys %coref_info){
         $constant_counter++;
         my %been = ();
@@ -228,7 +276,8 @@ sub add_coref(){
                   my $boxer_tid = $sid * 1000 + $tid;
                   if(exists $id2props{$sid}{$boxer_tid}){
                         for my $pname (keys %{$id2props{$sid}{$boxer_tid}}){
-                        	my @args =  @{$id2props{$sid}{$boxer_tid}{$pname}{'args'}};
+                           for my $farg (keys %{$id2props{$sid}{$boxer_tid}{$pname}{'args'}}){
+                                my @args =  @{$id2props{$sid}{$boxer_tid}{$pname}{'args'}{$farg}};
 
 	                        my $arg = "";
 
@@ -245,13 +294,17 @@ sub add_coref(){
 	                        }
 
                                 $merge{$constant_counter}{$arg}=1;
+                           }
                         }
                   }
              }
         }
+
+        if((scalar(keys %{$merge{$constant_counter}}))<2){delete $merge{$constant_counter};}
     }
 
     if($warnings==1){print "Coreference information added.\n";}
+    #print OUT Dumper(%merge); exit(0);
 }
 
 ###########################################################################
@@ -339,72 +392,89 @@ sub add_nonmerge(){
 
    my @pids = keys %{$id2props{$sent_id}};
 
-   #CHECK CONDITIONAL AND MODALITY IN ADVANCE
-   if(($samepred==1)||($modality==1)){
-        for my $pid (@pids){
-	        for my $pname (keys %{$id2props{$sent_id}{$pid}}){
-                        if($samepred==1){
-                        	$id2props{$sent_id}{$pid}{$pname}{'cond'} = &check_conditional($pname,(scalar @{$id2props{$sent_id}{$pid}{$pname}{'args'}}));
-                        }
-
-                        if($modality==1){
-                                $id2props{$sent_id}{$pid}{$pname}{'mod'} = &define_modality($sent_id,$pid,$pname);
-                        }
-	        }
-	}
+   my %props2pids=();
+   for my $pid (@pids){
+       for my $pname (keys %{$id2props{$sent_id}{$pid}}){
+             for my $farg (keys %{$id2props{$sent_id}{$pid}{$pname}{'args'}}){
+                   my @args =  @{$id2props{$sent_id}{$pid}{$pname}{'args'}{$farg}};
+                   $props2pids{$pname}{$farg}{'args'}=[@args];
+                   $props2pids{$pname}{$farg}{'pid'}{$pid}=1;
+                   $props2pids{$pname}{$farg}{'pos'} = $id2props{$sent_id}{$pid}{$pname}{'pos'};
+             }
+       }
    }
 
-   foreach(my $i=0;$i<(scalar @pids);$i++){
-        my $pid1 = $pids[$i];
-        for my $pname1 (keys %{$id2props{$sent_id}{$pid1}}){
-              my @args =  @{$id2props{$sent_id}{$pid1}{$pname1}{'args'}};
+   #CHECK CONDITIONAL AND MODALITY IN ADVANCE
+   if(($samepred==1)||($modality==1)){
+       for my $pname (keys %props2pids){
+           if($samepred==1){
+                for my $farg (keys %{$props2pids{$pname}}){
+                	$props2pids{$pname}{$farg}{'cond'} = &check_conditional($pname);
+                }
+           }
 
-              ## ARGUMENTS OF THE SAME PREDICATE CANNOT BE MERGED
-              if($sameargs == 1){
+           if($modality==1){
+                foreach my $farg (keys %{$props2pids{$pname}} ){
+                       if($props2pids{$pname}{$farg}{'pos'} eq 'n'){$props2pids{$pname}{$farg}{'mod'} = "" ;}
+                       else{$props2pids{$pname}{$farg}{'mod'} = &define_modality(\%props2pids,$pname,$farg);}
+                }
+   	   }
+   	}
+   }
+
+   my @pnames = keys %props2pids;
+
+   for (my $pi=0; $pi<(scalar @pnames);$pi++){
+       my $pname1 = $pnames[$pi];
+
+       for my $farg1 (keys %{$props2pids{$pname1}}){
+           my @args1 =  @{$props2pids{$pname1}{$farg1}{'args'}};
+
+           ## ARGUMENTS OF THE SAME PREDICATE CANNOT BE MERGED
+
+           if($sameargs == 1){
                         my $str = "(!=";
-                        foreach(my $i=0;$i<(scalar @args);$i++){
-                             $str = $str." ".$args[$i];
+                        foreach(my $i=0;$i<(scalar @args1);$i++){
+                             $str = $str." ".$args1[$i];
 
 	                }
                         $nonmerge{$str.")"} = 1;
-               }
-               ############################################
+           }
+           ############################################
 
-               ## FIRST ARGUMENTS OF PREDICATES HAVING THE SAME NAME OR
-               ## DIFFERENT MODALITY CANNOT BE MERGED (EXCLUDING CONDITIONAL UNIFICATION PREDICATES)
-
-               if((($samepred==1)||($modality==1))&&($id2props{$sent_id}{$pid1}{$pname1}{'cond'} == 0)){
-                     foreach(my $j=$i+1;$j<(scalar @pids);$j++){
-        		my $pid2 = $pids[$j];
-        		for my $pname2 (keys %{$id2props{$sent_id}{$pid2}}){
-                           if($pname2 ne "WORD"){
-                             ## SAME PREDICATES CANNOT BE MERGED
-                             if(($samepred==1)&&($pname1 eq $pname2)){
-                                #print "$pid1 $pid2 $pname1\n";
-                                my $a1 = $args[0];
-	                        my $a2 = $id2props{$sent_id}{$pid2}{$pname2}{'args'}[0];
-	                        if($a1 ne $a2){
-	                                if(!(exists $nonmerge{"(!= ".$a2." ".$a1.")"})){
-                                                $nonmerge{"(!= ".$a1." ".$a2.")"} = 1;
-	                                }
-	                        }
-	                     }
-                             ## DIFFERENT MODALITIES CANNOT BE MERGED
-                             elsif(($modality==1)&&(&check_modality_clash($sent_id,$pid1,$pname1,$pid2,$pname2)==1)){
-                                 my $a1 = $args[0];
-	                         my $a2 = $id2props{$sent_id}{$pid2}{$pname2}{'args'}[0];
-	                         if($a1 ne $a2){
-	                         	if(!(exists $nonmerge{"(!= ".$a2." ".$a1.")"})){
-                                                $nonmerge{"(!= ".$a1." ".$a2.")"} = 1;
-	                                }
-	                         }
-                             }
+           if($props2pids{$pname1}{$farg1}{'cond'} == 0){
+                if($samepred == 1){
+                     for my $farg2 (keys %{$props2pids{$pname1}}){
+                           if(($farg1 ne $farg2)&&(!(exists $nonmerge{"(!= ".$farg2." ".$farg1.")"}))){
+                                ## FIRST ARGUMENTS OF PREDICATES HAVING THE SAME NAME AND THE SAME PID
+           			## CANNOT BE MERGED (EXCLUDING CONDITIONAL UNIFICATION PREDICATES)
+                           	for my $pid (keys %{$props2pids{$pname1}{$farg1}{'pid'}}){
+                                     if(exists $props2pids{$pname1}{$farg2}{'pid'}{$pid}){
+                                         $nonmerge{"(!= ".$farg1." ".$farg2.")"} = 1;
+                                         last;
+                                     }
+                                }
+                                ############################################
                            }
-                        }
                      }
-               }
-        }
+                }
+                ## PREDICATES WITH DIFFERENT MODALITIES CANNOT BE MERGED
+                if($modality == 1){
+                     for (my $pj=$pi+1; $pj<(scalar @pnames);$pj++){
+       			 my $pname2 = $pnames[$pj];
+                         for my $farg2 (keys %{$props2pids{$pname2}}){
+                             if(($farg1 ne $farg2)&&(!(exists $nonmerge{"(!= ".$farg2." ".$farg1.")"}))){
+                                    if(&check_modality_clash(\%props2pids,$pname1,$farg1,$pname2,$farg2)==1){
+                                    	$nonmerge{"(!= ".$farg1." ".$farg2.")"} = 1;
+                                    }
+                             }
+                         }
+                     }
+                }
+           }
+       }
    }
+
 }
 
 ###########################################################################
@@ -412,10 +482,12 @@ sub add_nonmerge(){
 ###########################################################################
 
 sub check_modality_clash(){
-    my ($sent_id,$pid1,$pname1,$pid2,$pname2) = @_;
+    my ($tmp,$pname1,$farg1,$pname2,$farg2) = @_;
 
-    my $pos1 = $id2props{$sent_id}{$pid1}{$pname1}{'pos'};
-    my $pos2 = $id2props{$sent_id}{$pid1}{$pname1}{'pos'};
+    my %props2pids = %{$tmp};
+
+    my $pos1 = $props2pids{$pname1}{'pos'};
+    my $pos2 = $props2pids{$pname2}{'pos'};
 
     if(($pos1 eq "n")||($pos2 eq "n")){
     	return 0;
@@ -425,8 +497,8 @@ sub check_modality_clash(){
     	return 0;
     }
 
-    my $mod1 = $id2props{$sent_id}{$pid1}{$pname1}{'mod'};
-    my $mod2 = $id2props{$sent_id}{$pid2}{$pname2}{'mod'};
+    my $mod1 = $props2pids{$pname1}{$farg1}{'mod'};
+    my $mod2 = $props2pids{$pname2}{$farg2}{'mod'};
 
     if($mod1 ne $mod2) {return 1;}
 
@@ -438,35 +510,32 @@ sub check_modality_clash(){
 ###########################################################################
 
 sub define_modality(){
-   my ($sent_id,$pid,$pname) = @_;
+   my ($tmp,$pname,$farg) = @_;
 
-   if($id2props{$sent_id}{$pid}{$pname}{'pos'} eq "n") {return "";}
+   my %props2pids = %{$tmp};
 
-   my $arg1 = $id2props{$sent_id}{$pid}{$pname}{'args'}[0];
+   my $arg1 = $props2pids{$pname}{$farg}{'args'}[0];
 
-
-   for my $pid2 (keys %{$id2props{$sent_id}}){
-        if($pid ne $pid2){
-        	for my $pname2 (keys %{$id2props{$sent_id}{$pid2}}){
-                     if(($id2props{$sent_id}{$pid2}{$pname2}{'pos'} ne "p")&&($pname2 ne "rel'")){
-                           my @args2 = @{$id2props{$sent_id}{$pid2}{$pname2}{'args'}};
-	                   foreach(my $k=1;$k<(scalar @args2);$k++){
-	                        if($args2[$k] eq $arg1){
-	                             return $pid2.$pname2;
-	                        }
-	                   }
-                    }
-        	}
+   for my $pname2 (keys %props2pids){
+      if(((($pname2=~/-vb'$/)||($pname2 eq "not'"))||($pname2 eq "pos'"))||($pname2 eq "nec'")){
+        for my $farg2 (keys %{$props2pids{$pname2}}){
+              my @args2 = @{$props2pids{$pname}{$farg}{'args'}};
+              foreach(my $i=1;$i<(scalar @args2);$i++){
+	      	if($args2[$i] eq $arg1){
+	           return $farg2.$pname2;
+	        }
+	      }
         }
+      }
    }
 
    return "";
 }
 ###########################################################################
-# CREATE FINAL OUTPUT BASH
+# CREATE FINAL OUTPUT BATCH
 ###########################################################################
 
-sub printHenryFormat_bash(){
+sub printHenryFormat_batch(){
 
    foreach my $sent_id(keys %id2props){
         &add_nonmerge($sent_id);
@@ -511,7 +580,8 @@ sub printHenryFormat(){
 
     foreach my $pid (keys %{$id2props{$sent_id}}){
          foreach my $pname (keys %{$id2props{$sent_id}{$pid}}){
-                       my @args = @{$id2props{$sent_id}{$pid}{$pname}{'args'}};
+              foreach my $farg (keys %{$id2props{$sent_id}{$pid}{$pname}{'args'}}){
+                       my @args = @{$id2props{$sent_id}{$pid}{$pname}{'args'}{$farg}};
                        my $key = $pname.",".$args[0];
                        if(!(exists $out_str{$key})){
                             my $pred_str = "(".$pname;
@@ -524,6 +594,7 @@ sub printHenryFormat(){
                             $out_str{$key}{'pred'} = $pred_str;
                        }
                        push(@{$out_str{$key}{'pids'}},$pid);
+              }
     	}
     }
 
@@ -582,17 +653,15 @@ sub read_Conditional_file(){
 ###########################################################################
 
 sub check_conditional(){
-	my ($pred,$arity) = @_;
+	my ($pred) = @_;
 
         if(exists $conditional{$pred}){
-        	if($conditional{$pred}==$arity){return 1;}
-                else{return 0;}
+        	return 1;
         }
 
         foreach my $regex (keys %regex_conditional){
             if($pred =~ /$regex/){
-               if($regex_conditional{$regex}==$arity){return 1;}
-               else{return 0;}
+               return 1;
             }
         }
 
@@ -628,6 +697,7 @@ sub read_Boxer_file(){
 	    	&add_nonmerge($sent_id);
 	   	&printHenryFormat($sent_id,0);
                 %id2props = ();
+                %nonmerge = ();
            }
 
            $sent_id = $1;
@@ -635,15 +705,17 @@ sub read_Boxer_file(){
            $sent_id =~ s/'//g;
            $ne_count = 0;
 
-           $count_words_before{$sent_id} = $word_counter;
+           #$count_words_before{$sent_id} = $word_counter;
        }
        elsif($line =~ /^(\d+) ([^\s]+) [^\s]+ [^\s]+ [^\s]+/){
-           #if(($sfile ne "")||($nefile ne "")){
-           #       my $id = $1;
-	   #       my $word = $2;
-	   #       $id2props{$sent_id}{$id}{'WORD'} = $word;
-           #}
            $word_counter++;
+           if(($sfile ne "")||($nefile ne "")){
+                  my $id = $1;
+	          my $word = $2;
+	          $global_token_index{$word_counter}{'tid'} = $id;
+                  $global_token_index{$word_counter}{'sid'} = $sent_id;
+                  $global_token_index{$word_counter}{'word'} = $word;
+           }
        }
        elsif($line ne ""){
            my @prop_str = split(" & ", $line);
@@ -718,14 +790,9 @@ sub read_Boxer_file(){
                                     my $lname = $nns[$i]."-nn'";
 
                                     foreach my $id (@ids){
-                                    	$id2props{$sent_id}{$id}{$lname}{'args'} = [@args];
+                                    	$id2props{$sent_id}{$id}{$lname}{'args'}{$args[0]} = [@args];
                                     	$id2props{$sent_id}{$id}{$lname}{'pos'} = "n";
 
-                                        if(($sfile ne "")||($nefile ne "")){
-                                		# CREATE args2props
-                                                $args2props{$sent_id}{$args[0]}{$id}{$lname}{'0'} = 1;
-                                        	$args2props{$sent_id}{$args[1]}{$id}{$lname}{'1'} = 1;
-                                        }
                                     }
                                 }
                                 else{
@@ -733,14 +800,8 @@ sub read_Boxer_file(){
                                     my $lname = $nns[$i]."-".$newpostfix."'";
 
                                     foreach my $id (@ids){
-                                    	$id2props{$sent_id}{$id}{$lname}{'args'} = [$sent_id."ne".$ne_count,$args[1]];
+                                    	$id2props{$sent_id}{$id}{$lname}{'args'}{$sent_id."ne".$ne_count} = [$sent_id."ne".$ne_count,$args[1]];
                                     	$id2props{$sent_id}{$id}{$lname}{'pos'} = "n";
-
-                                        if(($sfile ne "")||($nefile ne "")){
-                                		# CREATE args2props
-                                                $args2props{$sent_id}{$args[0]}{$id}{$lname}{'0'} = 1;
-                                        	$args2props{$sent_id}{$args[1]}{$id}{$lname}{'1'} = 1;
-                                        }
                                     }
                                 }
                            }
@@ -749,15 +810,9 @@ sub read_Boxer_file(){
                                 my $lname = $prefix."-".$newpostfix."'";
 
                                 foreach my $id (@ids){
-                                    	$id2props{$sent_id}{$id}{$lname}{'args'} = [@args];
+                                    	$id2props{$sent_id}{$id}{$lname}{'args'}{$args[0]} = [@args];
                                     	$id2props{$sent_id}{$id}{$lname}{'pos'} = $postfix;
 
-                                        if(($sfile ne "")||($nefile ne "")){
-                                		# CREATE args2props
-                                                for (my $i=0;$i<(scalar @args);$i++){
-                                                        $args2props{$sent_id}{$args[$i]}{$id}{$lname}{$i} = 1;
-                                                }
-                                        }
                                 }
                        }
                   }
@@ -768,15 +823,8 @@ sub read_Boxer_file(){
                         my $lname = $name."'";
 
                         foreach my $id (@ids){
-                                    	$id2props{$sent_id}{$id}{$lname}{'args'} = [@args];
+                                    	$id2props{$sent_id}{$id}{$lname}{'args'}{$args[0]} = [@args];
                                     	$id2props{$sent_id}{$id}{$lname}{'pos'} = "";
-
-                                        if(($sfile ne "")||($nefile ne "")){
-                                		# CREATE args2props
-                                                for (my $i=0;$i<(scalar @args);$i++){
-                                                        $args2props{$sent_id}{$args[$i]}{$id}{$lname}{$i} = 1;
-                                                }
-                                        }
                         }
                    }
                 }
@@ -798,6 +846,7 @@ sub read_Boxer_file(){
 	&add_nonmerge($sent_id);
 	&printHenryFormat($sent_id,0);
         %id2props = ();
+        %nonmerge = ();
     }
 
     if($warnings==1){print "Boxer file read.\n";}
