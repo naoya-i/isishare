@@ -62,8 +62,10 @@ def main():
 			
 		for n in lndel: current_stack.remove(n)
 
-	variables = []
-
+	variables					= []
+	out_clusters			= {}
+	out_clusters_dict = {}
+	
 	for i, cluster in sorted( clusters.iteritems(), key=lambda x: int(x[0]) ):
 		scluster = sorted(cluster, key=lambda x: (int(re.findall("^[0-9]+", x)[0]), int(re.findall("^[0-9]+[a-z]+([0-9]+)", x)[0])) )
 		
@@ -71,11 +73,21 @@ def main():
 			print "   ; Warning: %d entities are missing: " % (len(real_clusters[i]) - len(cluster)), i, real_clusters[i], scluster
 
 		if 1 >= len(cluster): continue
-		
-		print "   (= %s) ; Chain %s" % (" ".join( scluster ), i), real_clusters[i]
 
+		for v in scluster:
+			if out_clusters_dict.has_key(v): out_clusters[ out_clusters_dict[v] ] += scluster; break
+		else:
+			nc = len( out_clusters )
+			for v in scluster:
+				out_clusters_dict[v] = nc
+				
+			out_clusters[nc] = [] + scluster
+			
 		variables += [x for x in cluster]
 
+	for cluster in out_clusters.values():
+		print "  (= %s)" % " ".join(cluster)
+		
 	# variables = list(set(variables))
 
 	# print "  ",

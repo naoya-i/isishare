@@ -91,7 +91,7 @@ def main():
 				if "%s-%s" % (text_id, part_id) == current_text_id: print
 				continue
 			
-			if ln[0] in ["#begin"]: current_text_id = "-".join( re.findall("#begin document \(.*?([a-z]+_[0-9]+)\); part ([0-9]+)", " ".join(ln))[0] ); sent_id=1
+			if ln[0] in ["#begin"]: current_text_id = "-".join( re.findall("#begin document \(.*?([0-9a-z]+_[0-9]+)\); part ([0-9]+)", " ".join(ln))[0] ); sent_id=1
 
 			if "%s-%s" % (text_id, part_id) != current_text_id: continue
 			if ln[0] in ["#begin", "#end"]: print " ".join( ln ); continue

@@ -8,17 +8,16 @@ import argparse, sys, os, re
 def mycoref( target, pa ):
 
 	facts	 = []
-	henry	 = open( pa.henry[0] ).read()
 	ninput = open( pa.input[0] ).read()
 	
 	# Load mapping b/w entity variables and word id.
 	map_var_wordid = defaultdict(list)
-	mapper				 = lambda m: re.findall( "(%s)'\(([^)]+)\):[^:]+:[^:]+:\[([0-9ID,-]+)\]" % m, henry )
+	mapper				 = lambda m: re.findall( "\((%s) ([^()]+) :[^:]+:[^:]+:\[([0-9ID,-]+)\]\)" % m, ninput )
 
-	for predicate, variables, wordids in mapper("[^)]+"): #mapper( "[^) ]+-nn" ) + mapper( "[^) ]+-vb" ) + mapper("male|neuter|female|thing"):
-		for wordid in wordids.split(","):
+	for predicate, variables, wordids in mapper("[^( ]+"): #mapper( "[^) ]+-nn" ) + mapper( "[^) ]+-vb" ) + mapper("male|neuter|female|thing"):
+		for wordid in wordids.split(" "):
 			wordid_conv = wordid if "ID" not in wordid else repr(int(wordid.split("-ID")[0])*1000+int(wordid.split("-ID")[1]))
-			map_var_wordid[variables.split(",")[0] if "-vb" in predicate else variables.split(",")[1] ] += [wordid_conv]
+			map_var_wordid[variables.split(" ")[0] if "-vb" in predicate else variables.split(" ")[1] ] += [wordid_conv]
 
 	# List the sentences.
 	xml_root	 = etree.Element( "coreference-result", attrib={"text": target, "sentence": pa.sentence[0]} )
@@ -29,21 +28,21 @@ def mycoref( target, pa ):
 		if None == re.search( "\(name %s\)" % pa.sentence[0], ninput, flags=re.MULTILINE ):
 			print >>sys.stderr, "No sentence found:", pa.sentence[0]
 		else:
-			ret             = os.popen( "%s -m infer %s data/score-function.lisp %s -d %d -T 10 -p %s -t 8 -b %s/wn+fn.da -i %s -e %s -f '%s' %s" % (
-					pa.reasoner, pa.weight, pa.input[0], pa.depth,
+			ret             = os.popen( "%s -m infer %s data/score-function.lisp %s -d %d -T 10 -p %s -t 8 -b %s/wn+fn.da -i %s -e %s -f '%s'" % (
+					pa.reasoner, " ".join(pa.anythingelse), pa.input[0], pa.depth,
 					pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd,
-					pa.anythingelse ) ).read()
+					) ).read()
 			xml_ret					= etree.fromstring( ret.replace( "&", "&amp;" ) )
 			hypo            = xml_ret.xpath( "/henry-output/result-inference/hypothesis" )
 
 			if 0 == len(hypo): print >>sys.stderr, "No hypothesis..."; return facts
-			
-			hypothesis			= hypo[0].text
 
-			if None == hypothesis:
+			if None == hypothesis or None == hypo[0].text:
 				print >>sys.stderr, "?", ret
 				return []
 
+			hypothesis			= hypo[0].text.strip()
+			
 			# Coreference-chains identified by unification.
 			in_chain = []
 			
@@ -59,6 +58,8 @@ def mycoref( target, pa ):
 					chain_id += 1
 
 			for lit in hypothesis.split( " ^ " ):
+				if "(" not in lit: continue
+				
 				for term in re.findall( "\((.*?)\)", lit )[0].split(","):
 					if not term.startswith("_") and term not in in_chain:
 						xml_chain							 = etree.Element( "chain", attrib={"id": str(chain_id)} ); 	  xml_root.append( xml_chain )
@@ -84,11 +85,8 @@ def mycoref( target, pa ):
 def main():
 	parser = argparse.ArgumentParser( description="Abductive coreference resolution system." )
 	parser.add_argument( "--input", help="Input in Henry format.", nargs=1 )
-	parser.add_argument( "--henry", help="File mapping between word ids and henry literals.", nargs=1 )
-	parser.add_argument( "--weight", help="Weight file." )
 	parser.add_argument( "--depth", help="Depth.", default=0, type=int )
-	parser.add_argument( "--anythingelse", help="Commands passed to Henry.", default="" )
-	parser.add_argument( "--drs", help="File mapping between word ids and henry literals.", type=file )
+	parser.add_argument( "--anythingelse", help="Commands passed to Henry.", default=[], nargs="+" )
 	parser.add_argument( "--target", help="Problem to be resolved (e.g. wsj_0020-000).", nargs="+" )
 	parser.add_argument( "--sentence", help="Sentence to be resolved (e.g. 1).", nargs=1 )
 	parser.add_argument( "--datadir", help="Path to resources.", nargs=1 )
@@ -103,7 +101,6 @@ def main():
 	if None == pa.extmod:     parser.error( "Where's the external module?" )
 	if None == pa.target:     parser.error( "Which problem should I solve?" )
 	if None == pa.datadir:    parser.error( "Where's the resources?" )
-	if None == pa.drs:        parser.error( "Where's the DRS file?" )
 	
 	for target in pa.target:
 		mycoref( target, pa )

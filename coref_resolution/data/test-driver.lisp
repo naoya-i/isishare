@@ -4,6 +4,10 @@
 (O (name simple_unify) (^ (guy-nn e1 x1) (guy-nn e2 x2) )
    (label (^ (= x1 x2) ) ) )
 
+(O (name schema) (^ (sell-vb e1 x1 x2 x3) (gm-nn e2 x1) (buy-vb e3 y1 y2 y3) (naoya-nn e4 y1) )
+   (label (^ (= y1 x1) ) )
+   )
+
 ; 
 ; ARGUMENT CONSTRAINTS.
 

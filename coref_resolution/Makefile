@@ -22,6 +22,7 @@ CS_CORENLP_COREF_PORT = 9002
 
 DEPTH        = 0
 SHELL        = /bin/zsh
+REFRESH      = 0
 
 BSN        = $(basename $@)
 BSFN       = $(basename $(notdir $@))
@@ -34,7 +35,9 @@ EVAL_MEASURE         = all
 
 # Build options.
 ifneq (,$(findstring SCN,$(SETTING)))
-FLAGS_B2H +=--coref $(BSNWOPKG).corenlp 
+FLAGS_B2H +=--coref $(BSNWOPKG).corenlp
+else
+FLAGS_B2H +=--wholefileoutput 1
 endif
 
 ifneq (,$(findstring AIDA,$(SETTING)))
@@ -42,11 +45,12 @@ FLAGS_B2H +=--nedis $(BSN).aida
 endif
 
 # Mmhhmmaaahhhhyyy precious...
-.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.henry %.lisp %.conllidx %.sentcoref %.coref %.gold %.aida %.tok %.conll %.conll-allsent %.coref-allsent %.gold-allsent
+.PRECIOUS: %.drs %.ccg %.txt %.corenlp %.lisp %.conllidx %.sentcoref %.coref %.gold %.aida %.tok %.conll %.conll-allsent %.coref-allsent %.gold-allsent
 
 # MQP: Main Query Predicate
 %.evaluate:
 	mkdir -p $(BSDIR)
+	if expr $(REFRESH) = 1; then; touch $(BSN)/$(PKG)tmp.conll-allsent; rm -f $(BSN)/$(PKG)*.conll-allsent; fi
 	$(MAKE) $(BSN).docs
 	$(MAKE) `awk '{print "$(BSN)/$(PKG)" $$0 ".conll-allsent" }' < $(BSN).docs` `awk '{print "$(BSN)/" $$0 ".gold-allsent" }' < $(BSN).docs`
 	cat $(BSN)/*.gold-allsent > tmp.gold-allsent
@@ -60,6 +64,12 @@ endif
 %.eval: %.conll %.coref %.gold
 	echo ";-)"
 
+%.score:
+	if expr $(REFRESH) = 1; then; rm -f $(BSN).coref-allsent $(BSN).conll-allsent $(BSNWOPKG).gold-allsent; fi
+	$(MAKE) $(BSN).conll-allsent $(BSNWOPKG).gold-allsent
+	cd /work/naoya-i/conll-2012/scorer/v4; \
+	perl scorer.pl $(EVAL_MEASURE) $(BSNWOPKG).gold-allsent $(BSN).conll-allsent
+
 %.gold: 
 	file="$(BSFN)"; file=$${file%%-*}; \
 	#if grep -q coreference-result $(BSN).coref; then;
@@ -67,6 +77,15 @@ endif
 	#fi
 
 %.gold-allsent:
+	if fgrep -q "hypothesis" $(BSN).coref-allsent; then; \
+		cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFNWOPKG) --format conll > $@; \
+	fi;
+	# if ! fgrep -q "ARE MISSING" $(BSN).ccg; then; \
+	# 	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@; \
+	# fi;
+	#cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@
+
+wao:
 	file="$(BSFN)"; file=$${file%%-*}; \
 	if grep -q coreference-result $(BSDIR)$(PKG)$(BSFN).coref-allsent; then; \
 	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@; \
@@ -80,11 +99,12 @@ endif
 	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).coref --conll-index conll.idx --goldmention > $@
 
 %.conll-allsent: conll.idx
+	if expr $(REFRESH) = 1; then; rm -f $(BSN).coref-allsent; fi
 	$(MAKE) $(BSN).coref-allsent
 	python $(DIR_PROGRAMS)/mergecoref.py --input $(BSN).coref-allsent --conll-index conll.idx --goldmention > $@
 
 %.docs:
-	cat `find $(DIR_CONLL)/*/data/$(DIR_CONLL_TYPE)/data/english/annotations/*/*/*/ -name '*auto_conll'` | perl -nle "print \$$1 . '_' . \$$2 . '-' . \$$3 if /\/([a-z]+)_(.*?)\); part ([0-9]+)/" $(DOCS_FILTER) > $@
+	cat `find $(DIR_CONLL)/*/data/$(DIR_CONLL_TYPE)/data/english/annotations/*/*/*/ -name '*auto_conll'` | perl -nle "print \$$1 . '_' . \$$2 . '-' . \$$3 if /\/([a-z0-9]+)_(.*?)\); part ([0-9]+)/" $(DOCS_FILTER) > $@
 
 conll.idx:
 	find $(DIR_CONLL) -name '*_auto_conll' | perl -nle 'print $$1 if /\/([^\/]+\..*?)$$/' > c1
@@ -101,7 +121,7 @@ conll.idx:
 	bsn="$(BSN)";   bsn=$${bsn%%~*}; \
 	bsfn="$(BSFN)"; bsfn=$${bsfn%%~*}; \
 	python $(DIR_PROGRAMS)/mycoref.py\
-	  --input $$bsn.lisp --henry $$bsn.henry --drs $$bsn.drs --reasoner $(DIR_REASONER)/bin/henry \
+	  --input $$bsn.lisp --henry $$bsn.henry --reasoner $(DIR_REASONER)/bin/henry \
 	  --target $$bsfn --sentence $$sentid $(OPTIONS) --datadir $(DIR_DATA) --extmod $(DIR_PROGRAMS)/henryext.py \
 	  --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' >> $@
 	#  > $@
@@ -113,7 +133,7 @@ conll.idx:
 	bsnwopkg="$(BSNWOPKG)"; bsnwopkg=$${bsnwopkg%%~*}; \
 	bsfn="$(BSFNWOPKG)"; bsfn=$${bsfn%%~*}; \
 	python $(DIR_PROGRAMS)/mycoref.py\
-	  --input $$bsn.lisp --weight $(WEIGHT) --henry $$bsn.henry --drs $$bsnwopkg.drs --reasoner $(DIR_REASONER)/bin/henry \
+	  --input $$bsn.lisp --reasoner $(DIR_REASONER)/bin/henry \
 	  --target $$bsfn --sentence 0 $(OPTIONS) --datadir $(DIR_DATA) --depth $(DEPTH) --extmod $(DIR_PROGRAMS)/henryext.py \
 	  --extcmd '--funcrel data/func_relations-patterns-uniq.txt --ineq data/inequality.kb' --anythingelse '$(ANYTHINGELSE)' >> $@ \
 	#  >> $@
@@ -126,30 +146,33 @@ conll.idx:
 	echo "</coreference-output>" >> $@
 
 $(DIR_DATA)/kb.da:
-	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-basic.lisp -o $@
+	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp $(DIR_DATA)/wn-hyp.lisp $(DIR_DATA)/fn-mt1r.lisp $(DIR_DATA)/fn-rel.lisp $(DIR_DATA)/fn-sr.lisp -o $@
 
-%.lisp: %.henry conll.idx
-	python $(DIR_PROGRAMS)/henry2n700.py $(BSN).henry | perl -ple 's/\((loc|org|nam|per|ttl) /(\@$$1 /g' | perl -ple 's/\((neuter|thing|male|female|his) /(~$$1 /g' | sort -nk3,3 > $@
-	perl -nle "print \$$1 if /\(\^(.*)\) \)$$/" $@ | awk '{print "   " $$0}' > $@.allsent
-	echo "(O (name 0) (^ " >> $@
-	cat $@.allsent >> $@
-	echo "  ) (label (^" >> $@
+$(DIR_DATA)/kb-wnfn.da:
+	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp $(DIR_DATA)/wn-hyp.lisp $(DIR_DATA)/fn-mt1r.lisp $(DIR_DATA)/fn-rel.lisp -o $@
+
+%.lisp: conll.idx
+	$(MAKE) $(BSNWOPKG).drs
+	perl $(DIR_PROGRAMS)/Boxer2Henry.pl --input $(BSNWOPKG).drs --output $@.com $(FLAGS_B2H)
+	cat $@.com | sed "s/' / /g" | perl -ple 's/\((loc|org|nam|per|ttl) /(\@$$1 /g' | perl -ple 's/\((neuter|thing|male|female|his) /(~$$1 /g' | perl -ple 's/\((not|pos|nec) /($$1-M /g' | python -c 'import sys; print sys.stdin.read()[:-2]' > $@
+	echo "  (label (^" >> $@
 	python $(DIR_PROGRAMS)/make-train.py --input $(BSNWOPKG).drs --textid $(BSFNWOPKG) --conll-index conll.idx >> $@
 	echo "  ) ) )" >> $@
-	rm $@.allsent
-
-%.henry:
-	$(MAKE) $(BSNWOPKG).drs
-	perl $(DIR_PROGRAMS)/Boxer2Henry.pl --input $(BSNWOPKG).drs --output $@ $(FLAGS_B2H)
+	rm $@.com
 
 %.aida:
 	java -jar program/AIDAinterface.jar input:$(BSN).txt output:$@
 
 %.drs: %.ccg
-	$(DIR_CANDC)/bin/boxer --input $(BSN).ccg --resolve true --semantics tacitus > $@
+	$(DIR_CANDC)/bin/boxer --input $(BSN).ccg --resolve false --modal true --semantics tacitus > $@
 
 %.ccg: %.tok
-	$(DIR_CANDC)/bin/soap_client --url "localhost:$(CANDC_SOAP_PORT)" --input $(BSN).tok > $@ #$(DIR_CANDC)/bin/candc --models $(DIR_CANDC)/models/boxer --candc-printer boxer --input $(BSN).tok > $@
+	$(DIR_CANDC)/bin/soap_client --url "localhost:$(CANDC_SOAP_PORT)" --input $(BSN).tok > $@
+	err=`expr \`wc -l $(BSN).tok | cut -f1 -d' '\` - \`awk '$$0 ~ /ccg\([0-9]+/' $@ | wc -l | cut -f1 -d' '\``; \
+	if expr $$err != 0; then; \
+		echo "" >> $@; \
+		echo "% $$err SENTENCE(S) ARE MISSING." >> $@; \
+	fi
 
 %.tok: %.txt
 	cp $(BSN).txt $@
@@ -162,7 +185,7 @@ $(DIR_DATA)/kb.da:
 	python $(DIR_PROGRAMS)/cscorenlp.py --port $(CS_CORENLP_COREF_PORT) --cmd parse --input $(BSN).txt > $@
 
 %.losscurve:
-	perl -nle 'print $$1 if /averaged-loss="([0-9e.-]+)"/' $(BSN) | cat -n > tmp1
+	bsn='$(BSN)'; perl -nle 'print $$1 if /averaged-loss="([0-9e.-]+)"/' $${bsn#.*} | cat -n > tmp1
 	echo 'set terminal pdf; set size ratio 1; set xrange [0:$(MAX_ITER)]; set xlabel "Number of Iteration"; set ylabel "Averaged Loss"; plot "tmp1" with lp title "$(T1)", "tmp2" with lp title "$(T2)", \
 	"tmp3" with lp title "$(OUTPUT3)";' | gnuplot > ~/public_html/proofgraph.pdf
 	mv tmp1 tmp2
@@ -179,3 +202,4 @@ $(DIR_DATA)/kb.da:
 		-outputDirectory $(BSN) -extension .tok -replaceExtension .tok -outputExtension .corenlp -threads $(NUM_JOBS) -noClobber \
 		2>> $(BSN).$$f.corenlplog.stderr >> $(BSN).$$f.corenlplog.stdout &; \
 	end;
+
