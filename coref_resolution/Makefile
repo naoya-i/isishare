@@ -41,7 +41,7 @@ FLAGS_B2H +=--wholefileoutput 1
 endif
 
 ifneq (,$(findstring AIDA,$(SETTING)))
-FLAGS_B2H +=--nedis $(BSN).aida 
+FLAGS_B2H +=--nedis $(BSNWOPKG).aida 
 endif
 
 # Mmhhmmaaahhhhyyy precious...
@@ -50,9 +50,9 @@ endif
 # MQP: Main Query Predicate
 %.evaluate:
 	mkdir -p $(BSDIR)
-	if expr $(REFRESH) = 1; then; touch $(BSN)/$(PKG)tmp.conll-allsent; rm -f $(BSN)/$(PKG)*.conll-allsent; fi
+	if expr $(REFRESH) = 1; then; touch $(BSN)/$(PKG)tmp.conll-allsent; touch $(BSN)/tmp.gold-allsent; rm -f $(BSN)/*.gold-allsent $(BSN)/$(PKG)*.conll-allsent; fi
 	$(MAKE) $(BSN).docs
-	$(MAKE) `awk '{print "$(BSN)/$(PKG)" $$0 ".conll-allsent" }' < $(BSN).docs` `awk '{print "$(BSN)/" $$0 ".gold-allsent" }' < $(BSN).docs`
+	$(MAKE) `awk '{print "$(BSN)/$(PKG)" $$0 ".conll-allsent" }' < $(BSN).docs` `awk '{print "$(BSN)/$(PKG)" $$0 ".gold-allsent" }' < $(BSN).docs`
 	cat $(BSN)/*.gold-allsent > tmp.gold-allsent
 	cat $(BSN)/$(PKG)*.conll-allsent > tmp.conll-allsent
 	echo "Evaluating..."
@@ -77,7 +77,7 @@ endif
 	#fi
 
 %.gold-allsent:
-	if fgrep -q "hypothesis" $(BSN).coref-allsent; then; \
+	if fgrep -q "Optimal" $(BSN).coref-allsent; then; \
 		cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFNWOPKG) --format conll > $@; \
 	fi;
 	# if ! fgrep -q "ARE MISSING" $(BSN).ccg; then; \
@@ -135,7 +135,7 @@ conll.idx:
 	python $(DIR_PROGRAMS)/mycoref.py\
 	  --input $$bsn.lisp --reasoner $(DIR_REASONER)/bin/henry \
 	  --target $$bsfn --sentence 0 $(OPTIONS) --datadir $(DIR_DATA) --depth $(DEPTH) --extmod $(DIR_PROGRAMS)/henryext.py \
-	  --extcmd '--funcrel data/func_relations-patterns-uniq.txt --ineq data/inequality.kb' --anythingelse '$(ANYTHINGELSE)' >> $@ \
+	  --extcmd '$(EXTCMD) ' --anythingelse '$(ANYTHINGELSE) ' >> $@ \
 	#  >> $@
 	echo "</coreference-output>" >> $@
 
@@ -149,7 +149,7 @@ $(DIR_DATA)/kb.da:
 	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp $(DIR_DATA)/wn-hyp.lisp $(DIR_DATA)/fn-mt1r.lisp $(DIR_DATA)/fn-rel.lisp $(DIR_DATA)/fn-sr.lisp -o $@
 
 $(DIR_DATA)/kb-wnfn.da:
-	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp $(DIR_DATA)/wn-hyp.lisp $(DIR_DATA)/fn-mt1r.lisp $(DIR_DATA)/fn-rel.lisp -o $@
+	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp $(DIR_DATA)/wn-hyp.lisp $(DIR_DATA)/wn-der.lisp $(DIR_DATA)/fn-mt1r.lisp $(DIR_DATA)/fn-rel.lisp -o $@
 
 %.lisp: conll.idx
 	$(MAKE) $(BSNWOPKG).drs
@@ -203,3 +203,8 @@ $(DIR_DATA)/kb-wnfn.da:
 		2>> $(BSN).$$f.corenlplog.stderr >> $(BSN).$$f.corenlplog.stdout &; \
 	end;
 
+
+
+fancy:
+	python ~/work/henry-n700/tools/proofgraph.py --input l | /usr/bin/dot -Tpdf > ~/public_html/proofgraph.pdf
+	python ~/work/henry-n700/tools/proofgraph.py --input l --format html > ~/public_html/

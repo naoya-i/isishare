@@ -28,7 +28,7 @@ def mycoref( target, pa ):
 		if None == re.search( "\(name %s\)" % pa.sentence[0], ninput, flags=re.MULTILINE ):
 			print >>sys.stderr, "No sentence found:", pa.sentence[0]
 		else:
-			ret             = os.popen( "%s -m infer %s data/score-function.lisp %s -d %d -T 10 -p %s -t 8 -b %s/wn+fn.da -i %s -e %s -f '%s'" % (
+			ret             = os.popen( "%s -m infer %s %s -d %d -T 10 -p %s -t 8 -b %s/kb-wnfn.da -i %s -e %s -f '%s' -O proofgraph" % (
 					pa.reasoner, " ".join(pa.anythingelse), pa.input[0], pa.depth,
 					pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd,
 					) ).read()
