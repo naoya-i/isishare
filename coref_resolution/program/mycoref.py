@@ -28,13 +28,15 @@ def mycoref( target, pa ):
 		if None == re.search( "\(name %s\)" % pa.sentence[0], ninput, flags=re.MULTILINE ):
 			print >>sys.stderr, "No sentence found:", pa.sentence[0]
 		else:
-			ret             = os.popen( "%s -m infer %s %s -d %d -T 10 -p %s -t 8 -b %s/kb-wnfn.da -i %s -e %s -f '%s' -O proofgraph" % (
+			cmd = "%s -T 10 -O proofgraph -m infer %s %s -d %d -p %s -t 8 -b %s/kb-wnfn.da -i %s -e %s -f '%s'" % (
 					pa.reasoner, " ".join(pa.anythingelse), pa.input[0], pa.depth,
 					pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd,
-					) ).read()
+					)
+			print >>sys.stderr, cmd
+			ret             = os.popen(cmd).read()
 			xml_ret					= etree.fromstring( ret.replace( "&", "&amp;" ) )
 			hypo            = xml_ret.xpath( "/henry-output/result-inference/hypothesis" )
-
+			
 			if 0 == len(hypo): print >>sys.stderr, "No hypothesis..."; return facts
 
 			if None == hypothesis or None == hypo[0].text:

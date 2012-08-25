@@ -21,6 +21,7 @@ CS_CORENLP_COREF_PORT = 9002
 #
 
 DEPTH        = 0
+INFMETHOD    = cpi
 SHELL        = /bin/zsh
 REFRESH      = 0
 
@@ -123,7 +124,7 @@ conll.idx:
 	python $(DIR_PROGRAMS)/mycoref.py\
 	  --input $$bsn.lisp --henry $$bsn.henry --reasoner $(DIR_REASONER)/bin/henry \
 	  --target $$bsfn --sentence $$sentid $(OPTIONS) --datadir $(DIR_DATA) --extmod $(DIR_PROGRAMS)/henryext.py \
-	  --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' >> $@
+	  --infmethod $(INFMETHOD) --extcmd '--nedisj --wndisj --argcons --condunif $(DIR_DATA)/cu-boxer.kb $(DIR_DATA)/cu-adj.kb' >> $@
 	#  > $@
 
 %.coref-allsent:
@@ -135,7 +136,7 @@ conll.idx:
 	python $(DIR_PROGRAMS)/mycoref.py\
 	  --input $$bsn.lisp --reasoner $(DIR_REASONER)/bin/henry \
 	  --target $$bsfn --sentence 0 $(OPTIONS) --datadir $(DIR_DATA) --depth $(DEPTH) --extmod $(DIR_PROGRAMS)/henryext.py \
-	  --extcmd '$(EXTCMD) ' --anythingelse '$(ANYTHINGELSE) ' >> $@ \
+	  --infmethod $(INFMETHOD) --extcmd '$(EXTCMD) ' --anythingelse '$(ANYTHINGELSE) ' >> $@ \
 	#  >> $@
 	echo "</coreference-output>" >> $@
 
@@ -153,8 +154,9 @@ $(DIR_DATA)/kb-wnfn.da:
 
 %.lisp: conll.idx
 	$(MAKE) $(BSNWOPKG).drs
+	touch $(BSNWOPKG).aida
 	perl $(DIR_PROGRAMS)/Boxer2Henry.pl --input $(BSNWOPKG).drs --output $@.com $(FLAGS_B2H)
-	cat $@.com | sed "s/' / /g" | perl -ple 's/\((loc|org|nam|per|ttl) /(\@$$1 /g' | perl -ple 's/\((neuter|thing|male|female|his) /(~$$1 /g' | perl -ple 's/\((not|pos|nec) /($$1-M /g' | python -c 'import sys; print sys.stdin.read()[:-2]' > $@
+	cat $@.com | sed "s/' / /g" | python -c 'import sys; print sys.stdin.read()[:-2]' > $@
 	echo "  (label (^" >> $@
 	python $(DIR_PROGRAMS)/make-train.py --input $(BSNWOPKG).drs --textid $(BSFNWOPKG) --conll-index conll.idx >> $@
 	echo "  ) ) )" >> $@
@@ -207,4 +209,11 @@ $(DIR_DATA)/kb-wnfn.da:
 
 fancy:
 	python ~/work/henry-n700/tools/proofgraph.py --input l | /usr/bin/dot -Tpdf > ~/public_html/proofgraph.pdf
-	python ~/work/henry-n700/tools/proofgraph.py --input l --format html > ~/public_html/
+	python ~/work/henry-n700/tools/proofgraph.py --input l --format html > ~/public_html/proofgraph.html
+
+%.quick:
+	rm -f /work/naoya-i/conll-2012/parsed/dev/$(BSN).conll-allsent
+	rm -f /work/naoya-i/conll-2012/parsed/dev/$(BSN).coref-allsent
+	make /work/naoya-i/conll-2012/parsed/dev/$(BSN).coref-allsent
+	python ~/work/henry-n700/tools/proofgraph.py --input /work/naoya-i/conll-2012/parsed/dev/$(BSN).coref-allsent --path /coreference-output/coreference-result/ | /usr/bin/dot -Tpdf > ~/public_html/proofgraph.pdf
+	python ~/work/henry-n700/tools/proofgraph.py --input /work/naoya-i/conll-2012/parsed/dev/$(BSN).coref-allsent --path /coreference-output/coreference-result/ --format html > ~/public_html/proofgraph.html
