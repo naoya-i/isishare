@@ -28,9 +28,10 @@ def mycoref( target, pa ):
 		if None == re.search( "\(name %s\)" % pa.sentence[0], ninput, flags=re.MULTILINE ):
 			print >>sys.stderr, "No sentence found:", pa.sentence[0]
 		else:
-			cmd = "%s -T 10 -O proofgraph -m infer %s %s -d %d -p %s -t 8 -b %s/kb-wnfn.da -i %s -e %s -f '%s'" % (
+
+			cmd = "%s -T 10 -O proofgraph -m infer %s %s -d %d -p %s -t 8 -i %s -e %s -f '%s'" % (
 					pa.reasoner, " ".join(pa.anythingelse), pa.input[0], pa.depth,
-					pa.sentence[0], pa.datadir[0], pa.infmethod, pa.extmod, pa.extcmd,
+					pa.sentence[0], pa.infmethod, pa.extmod, pa.extcmd,
 					)
 			print >>sys.stderr, cmd
 			ret             = os.popen(cmd).read()

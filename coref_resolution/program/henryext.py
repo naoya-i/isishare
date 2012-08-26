@@ -99,9 +99,9 @@ print >>sys.stderr, "Loading schema..."
 
 g_schema = {}
 
-if os.path.exists( "/work/naoya-i/conll-2012/schemas-size12.cdb" ):
+if os.path.exists(_myfile("../data/schemas-size12.cdb")):
 	print >>sys.stderr, "Using cache!"
-	g_schema = cdb.init( "/work/naoya-i/conll-2012/schemas-size12.cdb" )
+	g_schema = cdb.init(_myfile("../data/schemas-size12.cdb"))
 	
 else:
 	if "schema" in pa.caching: maker = cdb.cdbmake( _myfile("../data/schemas-size12.cdb"), _myfile("../data/schemas-size12.cdb.tmp") )
@@ -254,6 +254,8 @@ def cbScoreFunction( ctx ):
 			return 0 if "" == x[4].strip() else len(x[4].split(","))
 
 		#ret += [([["p%d" % p[2]]], "HYPOTHESIZED_%s" % (p[0].split("-")[-1]), -p[5])]
+		psuf		 = re.findall("-([^-]+)$", p[0])
+		psuf		 = (psuf[0] if 0 < len(psuf) else "")
 
 		# FUNCTIONAL WORDS
 		if not pa.nofuncrel:
@@ -356,7 +358,7 @@ def cbScoreFunction( ctx ):
 					if None != fe:
 
 						if not cp_prior.has_key("c%s %s" % (p[1][i], q[1][i])) and not cp_prior.has_key("c%s %s" % (q[1][i], p[1][i])):
-							ret += [([fc_cooc + ["c%s %s" % (p[1][i], q[1][i])]], "CP_PRIOR", -0.5)]
+							ret += [([fc_cooc + ["c%s %s" % (p[1][i], q[1][i])]], "CP_PRIOR_%s" % p[0], -1)]
 							cp_prior["c%s %s" % (p[1][i], q[1][i])] = 1
 						
 						# VALUE CONVERTER.
@@ -395,7 +397,7 @@ def cbScoreFunction( ctx ):
 				pj, qj = _isPn(p), _isPn(q)
 				
 				if pj[0] and qj[0] and 0 == len(set(pj[1]) & set(qj[1])):
-					if not pa.noinc: ret += [([fc_cooc_vu1], "DIFFERENT_PROPERNAMES_UNIFIED", -1)]
+					if not pa.noinc: ret += [([fc_cooc_vu1], "DIFFERENT_PROPERNAMES_UNIFIED_%s-%s" % (p[0], q[0]), -1)]
 						
 			#
 			# CONSTRAINTS
@@ -449,7 +451,7 @@ def cbScoreFunction( ctx ):
 		#  	ret += [([disj[0]], disj[1], -0.1)]
 
 		# CREATE FEATURE FOR DNF.
-		ret += [([disj[0] for disj in dnf_expl], "EXPLAINED", p[5])]
+		ret += [([disj[0] for disj in dnf_expl], "EXPLAINED_%s_%s" % (p[0], psuf), p[5])]
 			
 	return ret
 
@@ -569,8 +571,14 @@ def cbGetLoss( ctx, system, gold ):
 	#return (1.0 * math.sqrt((1.0*len(confmat["YN"]) + 1.0*len(confmat["NY"]))/total), [])
 
 	if "disagree" == pa.loss:
-		#return len(confmat["YN"]) + len(confmat["NY"])
-		return (1.0*(1.0 * (len(confmat["YN"]) + len(confmat["NY"])) / total if 0 < total else 1), [])
+		ls = 0.0
+		try: ls += 1.0*len(confmat["YN"])/(len(confmat["YN"])+len(confmat["NN"]))
+		except ZeroDivisionError: pass
+		try: ls += 1.0*len(confmat["NY"])/(len(confmat["YY"])+len(confmat["NY"])) 
+		except ZeroDivisionError: pass
+		return (ls/4.0, [])
+		#return (len(confmat["YN"]) + len(confmat["NY"]), [])
+		return (1.0*(1.0 * (0.1*len(confmat["YN"]) + 0.9*len(confmat["NY"])) / total if 0 < total else 1), [])
 
 	# Check the coreference outputs
 
