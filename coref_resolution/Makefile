@@ -21,6 +21,7 @@ CS_CORENLP_COREF_PORT = 9002
 #
 
 DEPTH        = 0
+TIMEOUT      = 10
 INFMETHOD    = cpi
 SHELL        = /bin/zsh
 REFRESH      = 0
@@ -78,9 +79,9 @@ endif
 	#fi
 
 %.gold-allsent:
-	if fgrep -q "Optimal" $(BSN).coref-allsent; then; \
 		cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFNWOPKG) --format conll > $@; \
-	fi;
+	# if fgrep -q "Optimal" $(BSN).coref-allsent; then; \
+	# fi;
 	# if ! fgrep -q "ARE MISSING" $(BSN).ccg; then; \
 	# 	cat `find $(DIR_CONLL) -name "*$$file*_auto_conll"` | python $(DIR_PROGRAMS)/conll2txt.py --textid $(BSFN) --format conll > $@; \
 	# fi;
@@ -135,8 +136,9 @@ conll.idx:
 	bsfn="$(BSFNWOPKG)"; bsfn=$${bsfn%%~*}; \
 	python $(DIR_PROGRAMS)/mycoref.py\
 	  --input $$bsn.lisp --reasoner $(DIR_REASONER)/bin/henry \
-	  --target $$bsfn --sentence 0 $(OPTIONS) --datadir $(DIR_DATA) --depth $(DEPTH) --extmod $(DIR_PROGRAMS)/henryext.py \
-	  --infmethod $(INFMETHOD) --extcmd '$(EXTCMD) ' --anythingelse '$(ANYTHINGELSE) ' >> $@ \
+	  --target $$bsfn --sentence 0 $(OPTIONS) --datadir $(DIR_DATA) --depth $(DEPTH) \
+	  --extmod $(DIR_PROGRAMS)/henryext.py  --infmethod $(INFMETHOD) --extcmd '$(EXTCMD) ' \
+	  --anythingelse '$(ANYTHINGELSE) ' --timeout $(TIMEOUT) >> $@ \
 	#  >> $@
 	echo "</coreference-output>" >> $@
 
@@ -149,8 +151,20 @@ conll.idx:
 $(DIR_DATA)/kb.da:
 	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp $(DIR_DATA)/wn-hyp.lisp $(DIR_DATA)/fn-mt1r.lisp $(DIR_DATA)/fn-rel.lisp $(DIR_DATA)/fn-sr.lisp -o $@
 
+$(DIR_DATA)/kb-wnfn-nohyp.da:
+	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp $(DIR_DATA)/fn-mt1r.lisp $(DIR_DATA)/fn-rel.lisp -o $@
+
 $(DIR_DATA)/kb-wnfn.da:
 	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp $(DIR_DATA)/wn-hyp.lisp $(DIR_DATA)/wn-der.lisp $(DIR_DATA)/fn-mt1r.lisp $(DIR_DATA)/fn-rel.lisp -o $@
+
+$(DIR_DATA)/kb-wn.da:
+	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp $(DIR_DATA)/wn-hyp.lisp -o $@
+
+$(DIR_DATA)/kb-wn-nohyp.da:
+	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/wn-ent.lisp $(DIR_DATA)/wn-mm.lisp $(DIR_DATA)/wn-cs.lisp -o $@
+
+$(DIR_DATA)/kb-fn.da:
+	$(DIR_REASONER)/bin/henry -m compile_kb $(DIR_DATA)/fn-mt1r.lisp $(DIR_DATA)/fn-rel.lisp -o $@
 
 %.lisp: conll.idx
 	$(MAKE) $(BSNWOPKG).drs

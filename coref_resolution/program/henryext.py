@@ -33,8 +33,13 @@ parser.add_argument( "--nofuncrel", help="Do not use functional relation KB.", a
 parser.add_argument( "--noexplident", help="Do not use explicit non-identity KB.", action="store_true" )
 parser.add_argument( "--nomodality", help="Do not use modality constraints.", action="store_true" )
 parser.add_argument( "--noinc", help="Do not use incompatibility constraints.", action="store_true" )
+parser.add_argument( "--nosynunify", help="Do not unify synset literals.", action="store_true" )
 parser.add_argument( "--noargineq",  help="Do not use argument inequality constraints.", action="store_true" )
+parser.add_argument( "--noder", help="Do not use derivational relations.", action="store_true" )
+parser.add_argument( "--nofnsr", help="Do not use framenet selectional restrictions.", action="store_true" )
+parser.add_argument( "--donothing", help="Dont do anything.", action="store_true" )
 parser.add_argument( "--wnannotate", help="Annotate synset predicates in preprocessing.", action="store_true" )
+parser.add_argument( "--wnhypannotate", help="Annotate synset predicates with hypernyms in preprocessing.", action="store_true" )
 parser.add_argument( "--ncannotate", help="Annotate narrative schema predicates in preprocessing.", action="store_true" )
 parser.add_argument( "--caching", help="Create caches.", default="" )
 
@@ -86,13 +91,22 @@ g_fm = [(re.compile(x.strip().split()[0][1:-1]) if x.startswith("/") else re.com
 
 
 #
+print >>sys.stderr, "Loading senses..."
+
+g_sen    = dict([("%s-%s-%s" % (ln.split()[0], ln.split()[1], 1000*int(ln.split()[2])+int(ln.split()[3])), ln.split()[4]) for ln in open(_myfile("../data/conll-sense.tsv")) ])
+
+
+
+#
 print >>sys.stderr, "Loading special predicates..."
 
 g_wep			= [re.compile(x.strip()[1:-1]) if x.startswith("/") else re.compile("^%s$" % x.strip())
 				for x in open(_myfile("../data/weak-evident-preds.txt")) if not x.startswith("#")]
 g_pnp			= [x.strip() for x in open(_myfile("../data/proper-name-preds.txt"))]
+g_prnp		= [x.strip() for x in open(_myfile("../data/pronoun-preds.txt"))]
 g_mp			= [x.strip() for x in open(_myfile("../data/modality-preds.txt"))]
 g_handinc = dict([(x.strip(), 1) for x in open(_myfile("../data/incompatible.txt"))])
+
 
 #
 print >>sys.stderr, "Loading schema..."
@@ -155,6 +169,17 @@ if not pa.nofuncrel:
 			
 
 #
+g_wnder = {}
+
+if not pa.noder:
+	print >>sys.stderr, "Loading WordNet derivational relations..."
+
+	for ln in open(_myfile("../data/WNderiv_list.txt")):
+		ln = ln.strip().replace("'", "").split()
+		g_wnder["%s-%s" % (ln[0], ln[1])] = None
+		
+	
+#
 # RESOURCE: INEQUALITIES
 g_explnids_list = []
 g_explicit_non_ids = []
@@ -182,17 +207,16 @@ if not pa.noexplident:
 		g_explicit_non_ids += [(atoms, dict( filter( lambda x: 1<len(x[1]), mapper.iteritems() ) ) )]
 
 #
-# print >>sys.stderr, "Loading frame disjointness axioms..."
+print >>sys.stderr, "Loading frame disjointness axioms..."
 
 g_fndisj = {}
 
-# for ln in open(_myfile("../data/fn-disj.tsv")):
-# 	ln = ln.split()
+for ln in open(_myfile("../data/fn-disj.tsv")):
+	ln = ln.strip().split()
 	
-# 	for p1 in ln:
-# 		for p2 in ln:
-# 			if p1 == p2: continue
-# 			g_fndisj["%s-%s" % (p1, p2)] = None
+	for i, p1 in enumerate(ln):
+		for p2 in ln[i+1:]:
+			g_fndisj["%s-%s" % (p1, p2)] = None
 
 print >>sys.stderr, "All knowledge bases are loaded."
 
@@ -229,10 +253,11 @@ def _getMatchingSets( ctx, query_literals ):
 
 
 def cbScoreFunction( ctx ):
+	if pa.donothing: return []
 	
 	ret		= []
 	set_p = henryext.getLiterals( ctx )
-	
+
 	# Explicit Non-identity
 	if not pa.noexplident:
 		for lfs in g_explnids_list:
@@ -244,7 +269,7 @@ def cbScoreFunction( ctx ):
 	same_pred_args = {}
 	cp_prior			 = {}
 	fr_cache			 = {}
-			
+	
 	for p in set_p:
 		if henryext.isTimeout(ctx): return ret
 		if p[0] in ["=", "!="]: continue
@@ -253,10 +278,19 @@ def cbScoreFunction( ctx ):
 		def _getDepth(x):
 			return 0 if "" == x[4].strip() else len(x[4].split(","))
 
-		#ret += [([["p%d" % p[2]]], "HYPOTHESIZED_%s" % (p[0].split("-")[-1]), -p[5])]
 		psuf		 = re.findall("-([^-]+)$", p[0])
 		psuf		 = (psuf[0] if 0 < len(psuf) else "")
+		predgen  = psuf
 
+		if "" == predgen:
+			if "FN" in p[0]: predgen = p[0]
+			if "synset" in p[0]: predgen = "synset"
+			if "Script" in p[0]: predgen = "Script"
+			if "cause"  in p[0]: predgen = "cause"
+			if "entail"  in p[0]: predgen = "entail"
+		
+		ret += [([["p%d" % p[2]]], "!HYPOTHESIZED_%s" % (predgen), -p[5])]
+		
 		# FUNCTIONAL WORDS
 		if not pa.nofuncrel:
 			for i, fr in enumerate(g_funcrel[p[0]]):
@@ -272,12 +306,23 @@ def cbScoreFunction( ctx ):
 		
 		# CREATE EXPLANATION FACTORS FOR p.
 		dnf_expl = []
+
+		# ARGUMENTS AT THE SAME OBSERVABLE PREDICATES.
+		if not pa.noargineq and "vb" == psuf and 4 == len(p[1]):
+			if not same_pred_args.has_key("%s-%s" % (p[1][1], p[1][2])) and not same_pred_args.has_key("%s-%s" % (p[1][2], p[1][1])): ret += [([["c%s %s" % (p[1][1], p[1][2])]], "ARGS_IN_SAME_PREDS", 1)]; same_pred_args["%s-%s" % (p[1][1], p[1][2])] = 1
+			if not same_pred_args.has_key("%s-%s" % (p[1][2], p[1][3])) and not same_pred_args.has_key("%s-%s" % (p[1][3], p[1][2])): ret += [([["c%s %s" % (p[1][2], p[1][3])]], "ARGS_IN_SAME_PREDS", 1)]; same_pred_args["%s-%s" % (p[1][2], p[1][3])] = 1
+			if not same_pred_args.has_key("%s-%s" % (p[1][1], p[1][3])) and not same_pred_args.has_key("%s-%s" % (p[1][3], p[1][1])): ret += [([["c%s %s" % (p[1][1], p[1][3])]], "ARGS_IN_SAME_PREDS", 1)]; same_pred_args["%s-%s" % (p[1][1], p[1][3])] = 1
+
 		
 		for q in set_p:
 			if q[0] in ["=", "!="]: continue
 			if p[2] == q[2]:        continue
 
 			if "" != p[4] and "" != q[4]:
+
+				# FRAME x FRAME DISJOINTNESS.
+				if g_fndisj.has_key("%s-%s" % (p[0], q[0])):
+					ret      += [([fc_cooc + ["c%s %s" % (p[1][0], q[1][0])]], "!FN_DISJOINT_FRAMES", -1000)]
 				
 				# IF THEY ARE EXPLAINING THE SAME THING, JUST IGNORE THEM. (p => q, p => q)
 				if 0 < len(set(p[4].split(",")) & set(q[4].split(","))): continue
@@ -293,18 +338,6 @@ def cbScoreFunction( ctx ):
 			fc_cooc_vuall1 = fc_cooc + (["c%s %s" % (p[1][i], q[1][i]) for i in xrange(1,len(p[1]))] if 1 < len(p[1]) and len(p[1]) == len(q[1]) else [])
 			fc_cooc_vuall  = fc_cooc + (["c%s %s" % (p[1][i], q[1][i]) for i in xrange(len(p[1]))] if len(p[1]) == len(q[1]) else [])
 
-			# ARGUMENTS AT THE SAME OBSERVABLE PREDICATES.
-			# if 1 < len(p[1]) and len(p[1]) == len(q[1]):
-			# 	for i in xrange(1,len(p[1])):
-			# 		if same_pred_args.has_key("%s-%s" % (q[1][i], p[1][i])) or same_pred_args.has_key("%s-%s" % (p[1][i], q[1][i])): continue
-
-			# 		for c1 in henryext.getLiteralsFromTerm(ctx, p[1][i]):
-			# 			for c2 in henryext.getLiteralsFromTerm(ctx, q[1][i]):
-			# 				if c1[2] == c2[2] and "" == c1[4] and "" == c2[4]:
-			# 					ret += [([["c%s %s" % (p[1][i], q[1][i])]], "UNIFY_SAME_PRED_ARGS", -1)]
-			# 					same_pred_args["%s-%s" % (p[1][i], q[1][i])] = 1
-			# 					break
-
 			#
 			# EXPLANATION FOR p.
 			if p[0] != q[0] and repr(p[2]) in q[4].split(","): dnf_expl += [(fc_cooc, "", 1)]
@@ -312,35 +345,28 @@ def cbScoreFunction( ctx ):
 			# PRONOUN COMPATIBILITY.
 			if p[0] in "person per".split() and q[0] in "male female".split(): dnf_expl += [(fc_cooc_vu1, "", 1)]
 			if "thing" == p[0]  and q[0] in "neuter".split():                  dnf_expl += [(fc_cooc_vu1, "", 1)]
-			
-			# SYNSET CAN BE EXPLAINED BY PRONOUNS.
-			# if p[0][0] == "~" and q[0].startswith("synset"):
-			# 	prn, nn = p, q
 
-			# 	if "3" != nn[0][6]:
-			# 		dnf_expl += [(fc_cooc_vuall, "PRONOUN_%s_REF_%s" % (prn[0], nn[0]), 1)]
+			# nn => PRONOUN
+			if p[0] != q[0] and (p[0] in g_prnp or p[0] in g_pnp) and "nn" == qsuf:
+				dnf_expl += [(fc_cooc_vu1, "", 1)]
 				
-				# try: dnf_expl += [(fc_cooc_vu1, "PRONOUN_%s_SENTDIST_%s" % (prn[0], min(1,abs(int(p[1][1].split("x")[0]) - int(q[1][1].split("x")[0])))), 1) ]
-				# except ValueError: pass
-
 			#
 			# EXPLANATION BY UNIFICATION.
 				
-			# BELOW ARE EXPLANATION BY UNIFICATION; AVOID DOUBLE-COUNT.
-			if p[2] <= q[2]: continue
-			
+			# BELOW ARE EXPLANATION BY UNIFICATION; AVOID DOUBLE-COUNT.			
 			_bothStartsWith = lambda x: p[0].startswith(x) and q[0].startswith(x)
 			_samePreds      = lambda: p[0] == q[0]
 
 			# CLASSICAL UNIFICATION.
-			if _samePreds():
+			if _samePreds() and (p[5] > q[5] or (p[5] == q[5] and p[2] > q[2])):
 				for cu in g_wep:
 					if not pa.nowep and None != cu.search(p[0]): break
 				else:
-					dnf_expl += [(fc_cooc_vuall, "UNIFY_PROPOSITIONS", 1)]
+					if not (pa.nosynunify and p[0].startswith("synset")):
+						dnf_expl += [(fc_cooc_vuall1, "UNIFY_PROPOSITIONS", 1)]
 
 			# UNIFICATION COST.
-			if not pa.nocp and p[0] == q[0] and len(p[1]) == len(q[1]):
+			if not pa.nocp and p[0] == q[0] and len(p[1]) == len(q[1]) and p[2] > q[2]:
 				for i in xrange(len(p[1])):
 					if p[1][i] == q[1][i]: continue
 					
@@ -348,117 +374,129 @@ def cbScoreFunction( ctx ):
 					fe, fv = "%s.%d" % (p[0], i), 0
 					
 					for matcher, after, value in g_fm:
-						fe, n = matcher.subn(after, fe)
-						fv		= value
-						if n > 0: break
+						fes, n = matcher.subn(after, fe)
+						fv		 = value
+												
+						if 0 == n: continue
+
+						# ADD AS AN EVIDENCE OF VARIABLE UNIFICATION.
+						if not (pa.nosynunify and "SYNSET" in fes):
+							
+							# VALUE CONVERTER.
+							if "$abstlevel" == fv: fv = g_word_abst.get(p[0], 0)
+							elif "$wordfreq" == fv: fv = g_word_freq.get(p[0].split("-")[-2], 0)
+
+							ret += [([fc_cooc + ["c%s %s" % (p[1][i], q[1][i])]], fes, float(fv))]
+
+							
+			# if p[0].startswith("synset1"):
+			# 	syn_dist = len(corpus.wordnet._synset_from_pos_and_offset("n", int(p[0][7:])).hypernym_distances())
+
+			# 	# BOXER AUX x SYNSET (>11)
+			# 	if p[0] != q[0] and 10<=syn_dist and q[0] in g_pnp:
+			# 		ret += [([fc_cooc_vu1], "PN-%s_SYN-%s_UNIFY_Y" % (q[0], p[0][6:]), 1)]
+
+			# 	# PRONOUN x SYNSET (>11)
+			# 	if p[0] != q[0] and 10<=syn_dist and q[0] in g_prnp:
+			# 		ret += [([fc_cooc_vu1], "PRO-%s_SYN-%s_UNIFY_Y" % (q[0], p[0][6:]), 1)]
+
+ 			# BOXER AUX x PRONOUN
+			if not pa.noinc and p[0] != q[0] and p[0] in g_pnp and q[0] in g_prnp:
+				ret += [([fc_cooc_vu1], "PN-%s_PRO-%s_UNIFY_Y" % (p[0], q[0]), 1)]
+
+			# FRAME x SYNSET: FRAMENET SELECTIONAL RESTRICTION.
+			if not pa.nofnsr:
+				if p[0].startswith("synset") and q[0].startswith("FN"):
+					syn, fn = (p, q) if p[0].startswith("synset") and q[0].startswith("FN") else (q, p)
+					fnsr = g_fnsr.get( "%s-%s" % (syn[0], fn[0]) )
+					if None != fnsr: 
+						ret += [([fc_cooc + ["c%s %s" % (fn[1][fnsr[3].index("x")], syn[1][1])]], "FN_%s_SEL_RESTR_Y" % fn[0], -1+fnsr[1])]
+
+			# SYMMETRIC FEATURES.
+			if p[2] > q[2]:
+				
+				# WORDNET FEATURE.
+				if p[0] != q[0] and _bothStartsWith("synset"):
+					if g_wnanto.has_key("%s-%s" % (q[0][7:], p[0][7:])) or g_wnanto.has_key("%s-%s" % (p[0][7:], q[0][7:])):
+						if not pa.noinc and p[1][1] != q[1][1]: ret += [([fc_cooc_vu1], "WN_ANTONYMOUS_SYNSET_Y", -1)]
 					else:
-						fe		= None
+						prnt1, prnt2 = g_wnhier.get( p[0][6:] ), g_wnhier.get( q[0][6:] )
+						if None != prnt1 and prnt1 == prnt2 and p[1][1] != q[1][1]:
+							if not pa.noinc: ret += [([fc_cooc_vu1], "WN_SIBLING_SYNSET_Y", -1)]
 
-					# ADD AS AN EVIDENCE OF VARIABLE UNIFICATION.
-					if None != fe:
-
-						if not cp_prior.has_key("c%s %s" % (p[1][i], q[1][i])) and not cp_prior.has_key("c%s %s" % (q[1][i], p[1][i])):
-							ret += [([fc_cooc + ["c%s %s" % (p[1][i], q[1][i])]], "CP_PRIOR_%s" % p[0], -1)]
-							cp_prior["c%s %s" % (p[1][i], q[1][i])] = 1
-						
-						# VALUE CONVERTER.
-						if "$abstlevel" == fv: fv = g_word_abst.get(p[0], fv)
-						elif "$wordfreq" == fv: fv = g_word_freq.get(p[0].split("-")[-2], fv)
-						
-						ret += [([fc_cooc + ["c%s %s" % (p[1][i], q[1][i])]], fe, float(fv))]
-
-			# WORDNET FEATURE.
-			if p[0] != q[0] and _bothStartsWith("synset"):
-				if g_wnanto.has_key("%s-%s" % (q[0][7:], p[0][7:])) or g_wnanto.has_key("%s-%s" % (p[0][7:], q[0][7:])):
-					if not pa.noinc: ret += [([fc_cooc_vu1], "WN_ANTONYMOUS_SYNSET_Y", -1)]
-				else:
-					prnt1, prnt2 = g_wnhier.get( p[0][6:] ), g_wnhier.get( q[0][6:] )
-					if None != prnt1 and prnt1 == prnt2:
-						if not pa.noinc: ret += [([fc_cooc_vu1], "WN_SIBLING_SYNSET_Y", -1)]
-
-			# HAND-CRAFTED INCOMPATIBILITY.
-			if g_handinc.has_key("%s %s" % (p[0], q[0])) or g_handinc.has_key("%s %s" % (q[0], p[0])):
-				if not pa.noinc: ret += [([fc_cooc_vu1], "HD_INCOMPATIBLE_Y", -1)]
+				if not pa.noder and p[1][1] != q[1][1] and (g_wnder.has_key("%s-%s" % (p[0], q[0])) or g_wnder.has_key("%s-%s" % (q[0], p[0]))):
+					ret += [([fc_cooc_vu1], "WN_DERIVATIONAL_Y", 1)]
+					
+				# HAND-CRAFTED INCOMPATIBILITY.
+				if g_handinc.has_key("%s %s" % (p[0], q[0])) or g_handinc.has_key("%s %s" % (q[0], p[0])):
+					if not pa.noinc and p[1][1] != q[1][1]: ret += [([fc_cooc_vu1], "HD_INCOMPATIBLE_Y", -1)]
 				
 				# try: dnf_expl += [(fc_cooc_vu1, "PRONOUN_%s_SENTDIST_%s" % (p[0], min(1,abs(int(p[1][1].split("x")[0]) - int(q[1][1].split("x")[0])))), 1) ]
 				# except ValueError: pass
 
-			# PROPER NAMES THAT DON'T BELONG TO THE SAME SYNSET
-			if "nn" == psuf == qsuf and p[0] != q[0]:
-				def _isPn(x):
-					f_p_pn, synsets = False, []
-					
-					for pp in henryext.getLiteralsFromTerm(ctx, x[1][1]):
-						if pp[0] in g_pnp: f_p_pn = True
-						if pp[0].startswith("synset"): synsets += [pp[0]]
+				# PROPER NAMES THAT DON'T BELONG TO THE SAME SYNSET
+				if "nn" == psuf == qsuf and p[0] != q[0]:
+					def _isPn(x):
+						f_p_pn, synsets = False, []
 
-					return f_p_pn, synsets
+						for pp in henryext.getLiteralsFromTerm(ctx, x[1][1]):
+							if pp[0] in g_pnp: f_p_pn = True
+							if pp[0].startswith("synset"): synsets += [pp[0]]
 
-				pj, qj = _isPn(p), _isPn(q)
-				
-				if pj[0] and qj[0] and 0 == len(set(pj[1]) & set(qj[1])):
-					if not pa.noinc: ret += [([fc_cooc_vu1], "DIFFERENT_PROPERNAMES_UNIFIED_%s-%s" % (p[0], q[0]), -1)]
+						return f_p_pn, synsets
+
+					pj, qj = _isPn(p), _isPn(q)
+
+					if pj[0] and qj[0] and 0 == len(set(pj[1]) & set(qj[1])):
+						if not pa.noinc and p[1][1] != q[1][1]: ret += [([fc_cooc_vu1], "DIFFERENT_PROPERNAMES_UNIFIED", -1)]
 						
-			#
-			# CONSTRAINTS
-				
-			# ARGUMENT CONSTRAINTS.
-			if not pa.noargineq:
-				if p[0] == q[0] and len(p[1]) == len(q[1]):
-					eas = ["%s%s %s" % ("c" if 0==i else "!c", p[1][i], q[1][i]) for i in xrange(len(p[1])) if "e" in p[1][i] or "e" in q[1][i]]
+				#
+				# CONSTRAINTS
 
-					if 2 <= len(eas):
-						ret += [([fc_cooc + eas], "ARGUMENT_CONSTR", -1)]
+				# ARGUMENT CONSTRAINTS.
+				if not pa.noargineq:
+					if p[0] == q[0] and len(p[1]) == len(q[1]):
+						eas = ["%s%s %s" % ("c" if 0==i else "!c", p[1][i], q[1][i]) for i in xrange(len(p[1])) if ("e" in p[1][i] or "e" in q[1][i]) and p[1][i] != q[1][i]]
 
-				# EVENT-DENOTING VARIBLE CONSTRAINTS.
-				# if _samePreds() and psuf == qsuf == "vb":
-				# 	try:
-				# 		ret += [([fc_cooc_vu0 + ["!c%s %s" % (p[1][i], q[1][i])]], "ARGUMENT_CONSTR", -1) for i in xrange(1, len(p[1]))]
-				# 	except IndexError:
-				# 		pass
+						if 2 <= len(eas):
+							ret += [([fc_cooc + eas], "ARGUMENT_CONSTR", -1)]
 
-				# 
-				# if p[0] == q[0] and "in" == psuf == qsuf and 2 < len(p[1]) and 2 < len(q[1]):
-				# 	ret += [([fc_cooc + ["c%s %s" % (p[1][1], q[1][1]), "!c%s %s" % (p[1][2], q[1][2])]], "ARGUMENT_CONSTR", -1)]
-					
-			# MODALITY CONSTRAINTS.
-			if not pa.nomodality:
-				if psuf == qsuf == "vb" and p[0] == q[0]:
-					try:
-						ps, qs = [x for x in henryext.getLiteralsFromTerm(ctx, p[1][0]) if (x[0] in g_mp and x[1][1] == p[1][0]) or (x[0].endswith("vb") and x[1][2] == p[1][0])], \
-								[x for x in henryext.getLiteralsFromTerm(ctx, q[1][0]) if (x[0] in g_mp and x[1][1] == q[1][0]) or (x[0].endswith("vb") and x[1][2] == q[1][0])]
+					# EVENT-DENOTING VARIBLE CONSTRAINTS.
+					if _samePreds() and psuf == qsuf == "vb":
+						try:
+							ret += [([fc_cooc_vu0 + ["!c%s %s" % (p[1][i], q[1][i])]], "ARGUMENT_CONSTR", -1) for i in xrange(1, len(p[1])) if p[1][i] != q[1][i]]
+						except IndexError:
+							pass
 
-						if len(ps) > 0 or len(qs) > 0:
-							ret += [([fc_cooc + ["c%s %s" % (p[1][i], q[1][i]) for i in xrange(0,len(p[1])) if "u" not in p[1][i] or "u" not in q[1][i]]], "MODALITY_CONSTR", -1)]
-					except IndexError:
-						pass
-				
-				
-			# FRAMENET FRAME-FRAME DISJOINTNESS.
-			if g_fndisj.has_key("%s-%s" % (p[0], q[0])):
-				ret      += [([fc_cooc_vu0], "FN_DISJOINT_FRAMES", -1)]
-		
-			# FRAMENET SELECTIONAL RESTRICTION.
-			if (p[0].startswith("synset") and q[0].startswith("FN")) or (q[0].startswith("FN") and p[0].startswith("synset")):
-				syn, fn = (p, q) if p[0].startswith("synset") and q[0].startswith("FN") else (q, p)
-				fnsr = g_fnsr.get( "%s-%s" % (syn[0], fn[0]) )
-				if None != fnsr: 
-					ret += [([fc_cooc + ["c%s %s" % (fn[1][fnsr[3].index("x")], syn[1][1])]], "FN_%s_SEL_RESTR_Y" % fn[0], -1+fnsr[1])]			
-				
+					# 
+					# if p[0] == q[0] and "in" == psuf == qsuf and 2 < len(p[1]) and 2 < len(q[1]):
+					# 	ret += [([fc_cooc + ["c%s %s" % (p[1][1], q[1][1]), "!c%s %s" % (p[1][2], q[1][2])]], "ARGUMENT_CONSTR", -1)]
+
+				# MODALITY CONSTRAINTS.
+				if not pa.nomodality:
+					if psuf == qsuf == "vb" and p[0] == q[0] and p[1][0] != q[1][0]:
+						try:
+							ps, qs = [x for x in henryext.getLiteralsFromTerm(ctx, p[1][0]) if (x[0] in g_mp and x[1][1] == p[1][0]) or (x[0].endswith("vb") and x[1][2] == p[1][0])], \
+									[x for x in henryext.getLiteralsFromTerm(ctx, q[1][0]) if (x[0] in g_mp and x[1][1] == q[1][0]) or (x[0].endswith("vb") and x[1][2] == q[1][0])]
+
+							if len(ps) > 0 or len(qs) > 0:
+								ret += [([fc_cooc + ["c%s %s" % (p[1][i], q[1][i]) for i in xrange(0,len(p[1])) if "u" not in p[1][i] or "u" not in q[1][i]]], "MODALITY_CONSTR", -1)]
+						except IndexError:
+							pass						
 
 		# CREATE FEATURE FOR EACH DISJUNCTIVE CLAUSE
 		# for disj in dnf_expl:
 		#  	ret += [([disj[0]], disj[1], -0.1)]
-
+		
 		# CREATE FEATURE FOR DNF.
-		ret += [([disj[0] for disj in dnf_expl], "EXPLAINED_%s_%s" % (p[0], psuf), p[5])]
+		ret += [([disj[0] for disj in dnf_expl], "!EXPLAINED_%s" % (predgen), p[5])]
 			
 	return ret
 
 
 g_uk = 0
 
-def _getSchemaLiterals(k, arg, parents):
+def _getSchemaLiterals(k, arg, parents, wn):
 	global g_uk
 	g_uk += 1
 	sc	= g_schema.get(k)
@@ -472,7 +510,7 @@ def _getSchemaLiterals(k, arg, parents):
 			sargs += [arg if j == int(sc.split(",")[0].split("-")[1]) else "_n%d" % g_uk]
 			g_uk += 1
 
-		ret += [("Script%s" % sc.split(",")[0].split("-")[0], sargs, parents)]
+		ret += [("Script%s" % sc.split(",")[0].split("-")[0], sargs, parents, wn)]
 		sc = g_schema.getnext()
 		
 	return ret
@@ -482,24 +520,29 @@ def _getSchemaLiterals(k, arg, parents):
 #
 def cbPreprocess( ctx, obs ):
 
-	ret		= []
+	ret	= []
+	bsn = henryext.getTargetName(ctx).split(".lisp")[0]
 	
+	# Annotating WordNet predicates.
 	if pa.wnannotate:
 		es_id = 0
 
-		for obp, obargs, obid in obs:
+		for obp, obargs, obid, obx, obwn in obs:
 
-			# Annotating WordNet predicates.
 			m = re.search( "-(nn|adj|vb)$", obp )
 			if None != m:
 				try:
-					s = corpus.wordnet.synset("%s.%s.01" % (obp.split("-")[-2], {"nn": "n", "adj": "a", "vb": "v"}.get(obp.split("-")[-1]) ))
-					es_id += 1
-					ret += [("synset%d%08d" % ({"n": 1, "a": 3, "v": 2}.get(s.pos, 0), s.offset), ["s%d" % es_id, obargs[{"n": 1, "a": 1, "v": 0}.get(s.pos, 0)]], [])]
+					s = corpus.wordnet.synset("%s.%s.%s" % (obp.split("-")[-2], {"nn": "n", "adj": "a", "vb": "v"}.get(obp.split("-")[-1]), g_sen.get("%s-%s" % (bsn, obx.split(":")[2][1:-1]), "01")))
+
+					for h in [s] + (s.hypernyms() if pa.wnhypannotate else []):
+						es_id += 1
+						ret += [("synset%d%08d" % ({"n": 1, "a": 3, "v": 2}.get(h.pos, 0), h.offset), ["s%d" % es_id, obargs[{"n": 1, "a": 1, "v": 0}.get(h.pos, 0)]], [], 0.0)]
+					
 				except corpus.reader.WordNetError: continue
 
+	# Narrative schema predicates.
 	if pa.ncannotate:
-		for obp, obargs, obid in obs:
+		for obp, obargs, obid, obx, obwn in obs:
 			if obp.endswith("-vb"):
 
 				# Search for the narrative schema.
@@ -509,13 +552,13 @@ def cbPreprocess( ctx, obs ):
 					argpred = [x for x in henryext.getLiteralsFromTerm(ctx, obargs[i]) if x[0].endswith("-nn") or x[0].startswith("~")]
 
 					if 0 == len(argpred):
-						ret += _getSchemaLiterals("%s-%s" % (obp.split("-")[-2], {1: "s", 2: "o", 3: "o"}[i]), obargs[i], [obid])
+						ret += _getSchemaLiterals("%s-%s" % (obp.split("-")[-2], {1: "s", 2: "o", 3: "o"}[i]), obargs[i], [obid], obwn)
 					else:
 						for ap in argpred:
 							if ap[0].startswith("~"):
-								ret += _getSchemaLiterals("%s-%s" % (obp.split("-")[-2], {1: "s", 2: "o", 3: "o"}[i]), obargs[i], [obid, ap[2]])
+								ret += _getSchemaLiterals("%s-%s" % (obp.split("-")[-2], {1: "s", 2: "o", 3: "o"}[i]), obargs[i], [obid, ap[2]], obwn)
 							else:
-								ret += _getSchemaLiterals("%s-%s,%s" % (obp.split("-")[-2], {1: "s", 2: "o", 3: "o"}[i], ap[0].split("-")[-2]), obargs[i], [obid, ap[2]])
+								ret += _getSchemaLiterals("%s-%s,%s" % (obp.split("-")[-2], {1: "s", 2: "o", 3: "o"}[i], ap[0].split("-")[-2]), obargs[i], [obid, ap[2]], obwn+ap[5])
 											
 	return ret
 
@@ -552,7 +595,7 @@ def cbGetLoss( ctx, system, gold ):
 			
 			cls = _est(vi,vj,gold_eq) + _est(vi,vj,system_eq)
 			confmat[ cls ] += [(vi,vj)]
-			wupd += [(henryext.getFactorOfUnification(ctx, vi, vj), 0.1 if cls == "NY" and vi.split("x")[0] != vj.split("x")[0] else 1.0)]
+			wupd += [(henryext.getFactorOfUnification(ctx, vi, vj), 0.2 if cls == "YN" and vi.split("x")[0] != vj.split("x")[0] else 0.8)]
 
 	print ["%s:%s" % (k, len(v)) for k, v in confmat.iteritems()]
 
@@ -571,12 +614,17 @@ def cbGetLoss( ctx, system, gold ):
 	#return (1.0 * math.sqrt((1.0*len(confmat["YN"]) + 1.0*len(confmat["NY"]))/total), [])
 
 	if "disagree" == pa.loss:
+		return (1.0*(1.0*(len(confmat["YN"]) + len(confmat["NY"])) / total if 0 < total else 1), [])
 		ls = 0.0
-		try: ls += 1.0*len(confmat["YN"])/(len(confmat["YN"])+len(confmat["NN"]))
+		# try: ls += 1.0*len(confmat["YN"])/(len(confmat["YN"])+len(confmat["NN"]))
+		# except ZeroDivisionError: pass
+		# try: ls += 1.0*len(confmat["NY"])/(len(confmat["YY"])+len(confmat["NY"])) 
+		# except ZeroDivisionError: pass
+		try: ls += 1.0*len(confmat["YN"])/(len(confmat["YN"])+len(confmat["YY"]))
 		except ZeroDivisionError: pass
-		try: ls += 1.0*len(confmat["NY"])/(len(confmat["YY"])+len(confmat["NY"])) 
+		try: ls += 1.0*len(confmat["NY"])/(len(confmat["NN"])+len(confmat["NY"])) 
 		except ZeroDivisionError: pass
-		return (ls/4.0, [])
+		return (ls/2.0, []) #wupd)
 		#return (len(confmat["YN"]) + len(confmat["NY"]), [])
 		return (1.0*(1.0 * (0.1*len(confmat["YN"]) + 0.9*len(confmat["NY"])) / total if 0 < total else 1), [])
 

@@ -1,0 +1,61 @@
+
+---
+MANUAL OF HENRY COREFERENCE PIPELINE
+---
+
+= 1. USAGE =
+
+Place the text that you want to target, and run the pipeline.
+
+  $ echo "Ed shouted at Tim because he was angry." > /home/naoya-i/test-set/text-test.txt
+  $ cd /PATH/TO/PIPELINE/
+  $ make /home/naoya-i/test-set/text-test.coref MODEL=models/full.lisp
+
+The pipeline automatically does the following things:
+
+- tokenizes the source text by using Stanford CoreNLP (saved to *.tok);
+- parses the tokenized text to DRS-based logical forms by using C&C tools (saved to *.ccg, *.drs);
+- converts the logical forms into Henry format (*.lisp);
+- performs abductive inference on the Henry file (saved to *.henry-output);
+- outputs the coreference clusters identified by abduction (saved to *.coref).
+
+If there already exists these files, the pipeline does nothing. To
+reproduce the files on the same dataset, please delete the
+corresponding files before you run the pipeline.
+
+The output (*.coref) will look like the following:
+
+{Ed (1010), he (1016)}
+{Tim (2010), he (2020)}
+
+Each line represents a cluster that includes the mentions that refer
+to the same entity, separated with commas. The number that follows
+mentions denotes an word ID, which points at a word in the original
+text. The ID is calculated by the sentence ID that the word belongs to
+* 1000 + the local word ID. For example, 1010 means that the word is
+at 10-th in the first sentence (1010 = 1000 * 1 + 10).
+
+
+= 2. INSPECT THE RESULTS =
+
+* Results of abduction
+
+  $ less test-text.henry-output
+  $ python /PATH/TO/HENRY/tools/proofgraph.py --format dot --input test-text.coref | dot -T pdf > graph.pdf
+
+* Results of coreference resolution
+
+  $ python program/viscoref.py --input test-text.henry-output
+
+
+= 3. OPTIONS =
+
+  $ make /home/naoya-i/test-set/text-test.coref
+  
+
+= 4. PRODUCING SEMEVAL FORMAT RESULTS =
+
+  $ python program/semeval.py --input test-text.henry-output --henry test-text.lisp
+
+  
+

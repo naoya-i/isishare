@@ -20,7 +20,7 @@ def mycoref( target, pa ):
 			map_var_wordid[variables.split(" ")[0] if "-vb" in predicate else variables.split(" ")[1] ] += [wordid_conv]
 
 	# List the sentences.
-	xml_root	 = etree.Element( "coreference-result", attrib={"text": target, "sentence": pa.sentence[0]} )
+	xml_root	 = etree.Element("coreference-result", attrib={"text": target, "sentence": pa.sentence[0]})
 	chain_id	 = 0
 	hypothesis = ""
 	
@@ -29,14 +29,13 @@ def mycoref( target, pa ):
 			print >>sys.stderr, "No sentence found:", pa.sentence[0]
 		else:
 
-			cmd = "%s -T 10 -O proofgraph -m infer %s %s -d %d -p %s -t 8 -i %s -e %s -f '%s'" % (
-					pa.reasoner, " ".join(pa.anythingelse), pa.input[0], pa.depth,
-					pa.sentence[0], pa.infmethod, pa.extmod, pa.extcmd,
-					)
+			cmd = "%s -m infer -b %s/kb-wnfn.da %s %s -d %d -p %s -t 8 -i %s -e %s -f '%s' -T %s" % (
+					pa.reasoner, pa.datadir, " ".join(pa.anythingelse), pa.input[0], pa.depth,
+					pa.sentence[0], pa.infmethod, pa.extmod, pa.extcmd, pa.timeout)
 			print >>sys.stderr, cmd
 			ret             = os.popen(cmd).read()
 			xml_ret					= etree.fromstring( ret.replace( "&", "&amp;" ) )
-			hypo            = xml_ret.xpath( "/henry-output/result-inference/hypothesis" )
+			hypo            = xml_ret.xpath("/henry-output/result-inference/hypothesis")
 			
 			if 0 == len(hypo): print >>sys.stderr, "No hypothesis..."; return facts
 
@@ -49,7 +48,7 @@ def mycoref( target, pa ):
 			# Coreference-chains identified by unification.
 			in_chain = []
 			
-			for lit in hypothesis.split( " ^ " ):
+			for lit in hypothesis.split(" ^ "):
 				if "=(" in lit:
 					xml_chain							 = etree.Element( "chain", attrib={"id": str(chain_id)} ); 	  xml_root.append( xml_chain )
 					xml_chain_vars				 = etree.Element( "variables" ); xml_chain.append( xml_chain_vars )
@@ -92,10 +91,12 @@ def main():
 	parser.add_argument( "--anythingelse", help="Commands passed to Henry.", default=[], nargs="+" )
 	parser.add_argument( "--target", help="Problem to be resolved (e.g. wsj_0020-000).", nargs="+" )
 	parser.add_argument( "--sentence", help="Sentence to be resolved (e.g. 1).", nargs=1 )
-	parser.add_argument( "--datadir", help="Path to resources.", nargs=1 )
+	parser.add_argument( "--datadir", help="Path to resources." )
+	parser.add_argument("--sentbysent", help="Enable sentence-by-sentence processing.", action="store_true")
 	parser.add_argument( "--extmod", help="Path to external module." )
 	parser.add_argument( "--extcmd", help="Commands passed to external module.", default="" )
 	parser.add_argument( "--infmethod", help="Inference method: cpi or bnb.", default="cpi" )
+	parser.add_argument( "--timeout", help="Timeout.", default="10" )
 	parser.add_argument( "--reasoner", help="Reasoner binary." )
 
 	pa = parser.parse_args()
